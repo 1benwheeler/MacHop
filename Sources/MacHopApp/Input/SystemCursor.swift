@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import CoreGraphics
 import Darwin
+import Foundation
 import MacHopCore
 
 /// The real Mac cursor, hidden while the phone owns input.
@@ -22,7 +23,44 @@ final class SystemCursor: CursorControl {
 
     func hide() {
         if !hidden { hidden = CGDisplayHideCursor(CGMainDisplayID()) == .success }
+        lastCheck = 0
+        reportedReappearance = false
     }
+
+    /// macOS can show the cursor again while MacHop has it hidden: switching Spaces or
+    /// full-screen apps hands the cursor to the newly active app (Ben, 12 Oct 2026: "two
+    /// mice moving"). Checked at most ten times a second; each extra hide is counted so
+    /// `show` stays balanced.
+    func keepHidden() {
+        guard hidden, let isVisible = Self.isVisible else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastCheck >= 0.1 else { return }
+        lastCheck = now
+        guard isVisible() != 0 else { return }
+        if CGDisplayHideCursor(CGMainDisplayID()) == .success { extraHides += 1 }
+        if !reportedReappearance {
+            reportedReappearance = true
+            Log.input.notice("The Mac cursor reappeared while the iPhone had input; hid it again")
+        }
+    }
+
+    /// Hides the cursor once more while the phone has input, without asking whether it
+    /// is visible: called when switching Spaces or apps, which can show it again. The
+    /// extra hide is counted, so `show` stays balanced.
+    func reassertHidden() {
+        guard hidden, CGDisplayHideCursor(CGMainDisplayID()) == .success else { return }
+        extraHides += 1
+    }
+
+    private var lastCheck = 0.0
+    private var extraHides = 0
+    private var reportedReappearance = false
+
+    /// CGCursorIsVisible: unavailable to Swift by name, but still provided by macOS.
+    private static let isVisible: (@convention(c) () -> Int32)? = {
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGCursorIsVisible") else { return nil }
+        return unsafeBitCast(symbol, to: (@convention(c) () -> Int32).self)
+    }()
 
     /// Relocates the cursor with a posted move, like a real mouse. A warp
     /// (CGWarpMouseCursorPosition) makes macOS ignore mouse movement for about
@@ -44,8 +82,15 @@ final class SystemCursor: CursorControl {
     func show(at point: Point?) {
         if let point { move(to: point) }
         if hidden {
-            CGDisplayShowCursor(CGMainDisplayID())
+            for _ in 0...extraHides { CGDisplayShowCursor(CGMainDisplayID()) }
+            // Never leave the Mac without a cursor, whatever macOS did to the count.
+            var tries = 0
+            while let isVisible = Self.isVisible, isVisible() == 0, tries < 5 {
+                CGDisplayShowCursor(CGMainDisplayID())
+                tries += 1
+            }
             hidden = false
+            extraHides = 0
         }
     }
 }

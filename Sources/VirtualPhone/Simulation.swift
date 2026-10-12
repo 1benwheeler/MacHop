@@ -125,6 +125,10 @@ public final class VirtualCursor: CursorControl {
 
     public func hide() { isHidden = true }
 
+    /// How often the session asked the cursor to stay hidden.
+    public private(set) var keepHiddenRequests = 0
+    public func keepHidden() { keepHiddenRequests += 1 }
+
     public func move(to point: Point) { warp(to: point) }
 
     public func show(at point: Point?) {

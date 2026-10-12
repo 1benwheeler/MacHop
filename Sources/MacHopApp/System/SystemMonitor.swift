@@ -8,6 +8,8 @@ import MacHopCore
 final class SystemMonitor {
     var onChange: (() -> Void)?
     var onDisplaysChanged: (() -> Void)?
+    /// The active Space or the frontmost app changed (either can show a hidden cursor).
+    var onFrontChange: (() -> Void)?
 
     private(set) var asleep = false
     private(set) var displaysAsleep = false
@@ -44,6 +46,12 @@ final class SystemMonitor {
             MainActor.assumeIsolated { self?.onDisplaysChanged?() }
         }
         tokens.append((NotificationCenter.default, token))
+        for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification] {
+            let front = workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.onFrontChange?() }
+            }
+            tokens.append((workspace, front))
+        }
     }
 
     private func observe(_ center: NotificationCenter, _ name: Notification.Name,

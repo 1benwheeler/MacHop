@@ -126,7 +126,7 @@ struct InputSessionTests {
         let slow = try #require(sim.session.phonePointer)
         #expect(abs(slow.x - (out > 0 ? 2 : link.phone.width - 2)) <= 3)
         sim.session.returnToMac(.requested)
-        sim.settle(InputSession.crossingCooldown)
+        sim.settle(InputSession.exitCooldown)
         // Flick: one 140-point event from 100 points away. 40 points pass the edge,
         // 6 of them are the resistance, and the rest carry onto the phone.
         sim.move(dx: link.edgeColumn - 100 * out - sim.cursor.location.x, dy: 0, step: 40)
@@ -176,6 +176,42 @@ struct InputSessionTests {
             sim.settle(0.1)
         }
         #expect(sim.ownerChanges.count == 20)
+    }
+
+    @Test("After ⌃⌥⌘⎋, a hand still moving towards the phone doesn't carry input straight back")
+    func shortcutExitStaysOut() throws {
+        let link = try #require(sim.session.screenLink)
+        let out = link.side.outward
+        #expect(sim.crossToPhone())
+        sim.pressModifier(59); sim.pressModifier(58); sim.pressModifier(55)
+        sim.keyDown(KeyMap.escapeKeyCode)
+        sim.keyUp(KeyMap.escapeKeyCode)
+        sim.releaseModifier(55); sim.releaseModifier(58); sim.releaseModifier(59)
+        #expect(sim.session.owner == .mac)
+        #expect(abs((link.edgeColumn - sim.cursor.location.x) * out - InputSession.exitInset) < 1, "lands inside the screen")
+        // Still pushing towards the phone, 0.15 s later.
+        sim.settle(0.15)
+        sim.move(dx: 80 * out, dy: 0, step: 4)
+        #expect(sim.session.owner == .mac)
+        // A deliberate push after the hold-off crosses normally.
+        sim.settle(InputSession.exitCooldown)
+        sim.move(dx: 60 * out, dy: 0, step: 4, stopOnOwnerChange: true)
+        #expect(sim.session.owner == .phone)
+    }
+
+    @Test("While the phone has input, the session keeps the Mac cursor hidden; never while the Mac has input")
+    func keepsCursorHidden() {
+        sim.move(dx: -200, dy: 50)
+        #expect(sim.cursor.keepHiddenRequests == 0)
+        #expect(sim.crossToPhone())
+        let before = sim.cursor.keepHiddenRequests
+        sim.move(dx: 0, dy: 120, step: 10)
+        #expect(sim.cursor.keepHiddenRequests > before, "checked as the pointer moves on the phone")
+        #expect(sim.returnToMac())
+        let afterReturn = sim.cursor.keepHiddenRequests
+        sim.move(dx: -100, dy: 0)
+        #expect(sim.cursor.keepHiddenRequests == afterReturn)
+        #expect(!sim.cursor.isHidden)
     }
 
     @Test("Jitter right after returning cannot bounce input straight back")
@@ -424,7 +460,7 @@ struct InputSessionTests {
         var settings = sim.session.settings
         settings.mediaKeysToPhone = true
         sim.session.configure(settings: settings, displays: sim.displays)
-        sim.settle(InputSession.crossingCooldown)
+        sim.settle(InputSession.exitCooldown)
         #expect(sim.crossToPhone())
         let macEvents = sim.macEvents.count
         #expect(sim.mediaKey(.volumeUp, down: true) == .suppress)
@@ -594,7 +630,7 @@ struct InputSessionTests {
         sim.keyUp(0)
         #expect(sim.macKeysDown.isEmpty)
         sim.radio.connect()
-        sim.settle()
+        sim.settle(InputSession.exitCooldown)
         #expect(sim.session.owner == .mac, "reconnecting never takes input by itself")
         #expect(sim.crossToPhone())
     }
@@ -607,6 +643,7 @@ struct InputSessionTests {
         sim.session.configure(settings: settings, displays: sim.displays)
         #expect(sim.session.owner == .mac)
         #expect(!sim.cursor.isHidden)
+        sim.settle(InputSession.exitCooldown)
         #expect(sim.crossToPhone())
         #expect(sim.cursor.isHidden)
     }

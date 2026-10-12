@@ -292,7 +292,7 @@ struct SimulationTests {
         sim.type("x")
         sim.settle(1.2)
         sim.session.setEnabled(sim.transport.isReady)   // what the app's refresh does
-        sim.settle(InputSession.crossingCooldown)
+        sim.settle(InputSession.exitCooldown)
         #expect(!sim.crossToPhone(), "must not cross back into a dead radio")
     }
 
@@ -373,7 +373,7 @@ struct SimulationTests {
         sim.session.setEnabled(true)
         #expect(sim.session.owner == .mac)
         checkQuiescent(sim)
-        sim.settle(InputSession.crossingCooldown)
+        sim.settle(InputSession.exitCooldown)
         #expect(sim.crossToPhone())
     }
 
@@ -390,7 +390,7 @@ struct SimulationTests {
         #expect(sim.session.screenLink == nil, "the phone's display is gone, so crossing is off")
         #expect(!sim.crossToPhone())
         sim.replaceDisplays([main, external])
-        sim.settle(InputSession.crossingCooldown)
+        sim.settle(InputSession.exitCooldown)
         #expect(sim.crossToPhone())
     }
 

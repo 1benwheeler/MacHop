@@ -14,6 +14,9 @@ public protocol HIDLink: AnyObject {
 public protocol CursorControl: AnyObject {
     /// Hide the cursor while the phone owns input.
     func hide()
+    /// Called as the pointer moves on the phone: hide the cursor again if macOS has
+    /// shown it (for example after switching Spaces), so two pointers never move at once.
+    func keepHidden()
     /// Move the (hidden) cursor without it counting as pointer movement.
     func move(to point: Point)
     /// Show the cursor again, moving it to `point` first when given.
@@ -153,6 +156,10 @@ public final class InputSession {
     /// and forth aren't held at the edge (0.25 s did that; trace, 12 Oct 2026); edge
     /// resistance and the carried flick keep real bounces out.
     public static let crossingCooldown = 0.08
+    /// After ⌃⌥⌘⎋ or any return not made through the edge: a longer hold-off, and the
+    /// cursor lands this far inside the screen.
+    public static let exitCooldown = 0.6
+    static let exitInset = 40.0
 
     public init(settings: SessionSettings, displays: [Display], link: HIDLink, cursor: CursorControl,
                 clock: @escaping () -> Double) {
@@ -252,11 +259,19 @@ public final class InputSession {
         // Release any button where it is, and leave the pointer there: iOS fades it
         // after about 15 s without movement (nothing a Bluetooth pointer sends hides it sooner).
         if let pointer = phonePointer { link.send(.pointer(pointerReport(at: pointer))) }
-        let destination = point ?? phonePointer.flatMap { screenLink?.returnPoint(phoneY: $0.y) }
+        var destination = point ?? phonePointer.flatMap { screenLink?.returnPoint(phoneY: $0.y) }
+        // A return the user didn't make by pushing through the edge (⌃⌥⌘⎋, Bluetooth
+        // dropping, …) lands a little inside the screen and holds off re-entry for
+        // longer, so a hand still moving towards the phone can't carry input straight back.
+        let deliberateExit = reason != .edge
+        if deliberateExit, point == nil, let link = screenLink, var landing = destination {
+            landing.x -= Self.exitInset * link.side.outward
+            destination = landing
+        }
         phonePointer = nil
         crossingPressure = 0
         returnPressure = 0
-        crossingAllowedAfter = clock() + Self.crossingCooldown
+        crossingAllowedAfter = clock() + (deliberateExit ? Self.exitCooldown : Self.crossingCooldown)
         if let destination, let from = lastLocation { expectJump(from: from, to: destination) }
         lastMacLocation = destination
         lastLocation = destination ?? lastLocation
@@ -310,6 +325,7 @@ public final class InputSession {
             // moves nothing, and must not end a drag-scroll in progress.
             guard delta != .zero else { return .suppress }
             finishStroke()
+            cursor.keepHidden()
             movePhonePointer(by: delta)
             // The hidden cursor moves with the phone pointer. Before it can reach a
             // screen edge (Dock, hot corners), put it back in the middle.

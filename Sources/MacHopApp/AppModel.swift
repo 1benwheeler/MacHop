@@ -77,6 +77,9 @@ final class AppModel {
         if !dryRun { settings.save() }
         monitor.onChange = { [weak self] in self?.refresh() }
         monitor.onDisplaysChanged = { [weak self] in self?.displaysChanged() }
+        monitor.onFrontChange = { [weak self] in
+            if self?.owner == .phone { self?.cursor.reassertHidden() }
+        }
         monitor.start()
         tap.decide = { [weak self] event in
             guard let self else { return .pass }
@@ -196,6 +199,15 @@ final class AppModel {
         if owner == .phone {
             if settings.hasCrossed != true { update { $0.hasCrossed = true } }
             watchWhilePhoneOwnsInput()
+            // A Space switch that was still animating when you crossed can show the
+            // cursor again just after: hide it once more.
+            let period = ownershipPeriod
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.owner == .phone, self.ownershipPeriod == period else { return }
+                    self.cursor.reassertHidden()
+                }
+            }
         } else {
             // Anything still physically held on return stays swallowed until released.
             let held = EventTap.physicallyHeld()
