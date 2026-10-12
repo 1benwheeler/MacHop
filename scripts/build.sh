@@ -18,6 +18,11 @@ for arch in arm64 x86_64; do
     parts+=("$(swift build -c release --triple "$arch-apple-macosx14.0" --show-bin-path)/MacHop")
 done
 lipo -create "${parts[@]}" -output "$binary"
+# MacHop loads nothing through @rpath, so drop the search paths SwiftPM adds: fewer
+# places a planted library could be looked for.
+while read -r path; do
+    install_name_tool -delete_rpath "$path" "$binary" 2>/dev/null || true
+done < <(otool -l "$binary" | awk '/LC_RPATH/ {getline; getline; print $2}' | sort -u)
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"

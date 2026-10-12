@@ -295,6 +295,11 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
         let key = ObjectIdentifier(request.characteristic)
         let value: Data?
         if let id = reportIDs[key] {
+            // The last report reveals what's held (e.g. a key), so only the chosen iPhone may read it.
+            if let owner = subscribedCentral ?? allowedCentral, request.central.identifier != owner {
+                peripheral.respond(to: request, withResult: .insufficientAuthorization)
+                return
+            }
             value = lastValues[id] ?? Data(transport.profile.neutralPayload(for: id))
         } else {
             value = values[key]
