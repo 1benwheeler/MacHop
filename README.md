@@ -5,9 +5,9 @@
 <h1 align="center">MacHop</h1>
 
 <p align="center">
-  <b>Use your Mac's keyboard and trackpad on your iPhone.</b><br>
-  Push the pointer past the edge of your screen and it hops onto your iPhone, like Universal Control does for iPad.<br>
-  No mirroring, no cables, and nothing to install on the iPhone.
+  <b>Universal Control, but for iPhone.</b><br>
+  Use your Mac's keyboard and trackpad on your iPhone. Just move your cursor off the edge of your screen.<br>
+  Free and open source. No mirroring, no cables, and nothing to install on the iPhone.
 </p>
 
 <p align="center">
