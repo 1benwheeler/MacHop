@@ -1,0 +1,20 @@
+# Roadmap
+
+## Next
+
+- **iPhone above or below the screen.** Today the iPhone sits to the left or right of a display. Above and below suit desktop Macs, where the phone often lies on the desk in front of the monitor. It needs care around the Dock and the menu bar, which already use those edges.
+- **iMac drawing.** An iMac's built-in screen is currently drawn as a MacBook.
+- **A short demo video** for the README.
+
+## Ideas
+
+- **Three-finger left/right to switch apps.** iPhone has no AssistiveTouch action for this, so it would need a faked drag along the bottom edge. It's only worth doing if it can be made reliable.
+
+## Not possible on iPhone today
+
+- **Scrolling with the pointer standing still:** iPhone handles wheel scrolling from a Bluetooth mouse unreliably and ignores touch surfaces, so MacHop scrolls by dragging.
+- **Pinch to zoom:** iPhone ignores touch input from Bluetooth devices.
+- **Hiding the pointer instantly:** iOS fades the AssistiveTouch pointer about 15 seconds after it stops moving, and a Bluetooth pointer can't hide it sooner.
+- **Home without setup:** neither the keyboard Home key nor the Globe key shortcuts reach Home on iPhone, so the gestures use AssistiveTouch's assignable buttons.
+
+Found a bug or have an idea? [Open an issue](https://github.com/1benwheeler/MacHop/issues).

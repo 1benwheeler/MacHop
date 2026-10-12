@@ -1,0 +1,10 @@
+.build/
+.research/
+dist/
+build/
+.DS_Store
+*.xcuserstate
+xcuserdata/
+private/
+Design/
+docs/results/
