@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import CoreGraphics
+import CryptoKit
 import Foundation
+import Security
 import MacHopCore
 
 /// Test-only control channel used by `machop-lab` to drive the running app.
@@ -9,6 +11,11 @@ import MacHopCore
 /// (or launch with `--automation`). It listens on a Unix socket readable only by
 /// the current user: ~/Library/Application Support/MacHop/automation.sock.
 /// Requests and responses are single-line JSON objects.
+///
+/// Only programs signed with the same certificate as MacHop itself (its lab tool)
+/// may connect. Without that check, any program running as the user could switch
+/// automation on and borrow MacHop's Accessibility permission to type and click on
+/// the Mac. An unsigned (ad-hoc) MacHop never starts automation at all.
 final class AutomationServer {
     static var isEnabled: Bool {
         UserDefaults.standard.bool(forKey: "AutomationEnabled") || CommandLine.arguments.contains("--automation")
@@ -26,6 +33,10 @@ final class AutomationServer {
     init(model: AppModel) { self.model = model }
 
     func start() {
+        guard Self.trustedClients != nil else {
+            Log.automation.error("Automation needs MacHop to be signed with a certificate; not started")
+            return
+        }
         let path = Self.socketURL.path
         try? FileManager.default.createDirectory(at: Self.socketURL.deletingLastPathComponent(),
                                                  withIntermediateDirectories: true,
@@ -68,6 +79,15 @@ final class AutomationServer {
         while true {
             let client = accept(fd, nil, nil)
             guard client >= 0 else { return }
+            guard Self.isTrusted(client) else {
+                close(client)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        Log.automation.error("Refused an automation connection from a program not signed like MacHop")
+                    }
+                }
+                continue
+            }
             Thread.detachNewThread { [weak self] in self?.serve(client) }
         }
     }
@@ -91,6 +111,38 @@ final class AutomationServer {
                 _ = data.withUnsafeBytes { write(client, $0.baseAddress, data.count) }
             }
         }
+    }
+
+    // MARK: Who may connect
+
+    /// "Signed with the same certificate as this MacHop", or nil if MacHop has no certificate.
+    private nonisolated(unsafe) static let trustedClients: SecRequirement? = {
+        var me: SecCode?
+        var staticCode: SecStaticCode?
+        var info: CFDictionary?
+        guard SecCodeCopySelf([], &me) == errSecSuccess, let me,
+              SecCodeCopyStaticCode(me, [], &staticCode) == errSecSuccess, let staticCode,
+              SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let certificates = (info as? [String: Any])?[kSecCodeInfoCertificates as String] as? [SecCertificate],
+              let leaf = certificates.first else { return nil }
+        let digest = Insecure.SHA1.hash(data: SecCertificateCopyData(leaf) as Data).map { String(format: "%02x", $0) }.joined()
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString("certificate leaf = H\"\(digest)\"" as CFString, [], &requirement) == errSecSuccess
+        else { return nil }
+        return requirement
+    }()
+
+    /// Checks the connecting process's code signature, identified by its audit token.
+    private nonisolated static func isTrusted(_ client: Int32) -> Bool {
+        guard let requirement = trustedClients else { return false }
+        var token = audit_token_t()
+        var length = socklen_t(MemoryLayout<audit_token_t>.size)
+        guard getsockopt(client, SOL_LOCAL, LOCAL_PEERTOKEN, &token, &length) == 0 else { return false }
+        let tokenData = withUnsafeBytes(of: &token) { Data($0) }
+        var code: SecCode?
+        guard SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributeAudit: tokenData] as CFDictionary, [], &code) == errSecSuccess,
+              let code else { return false }
+        return SecCodeCheckValidity(code, [], requirement) == errSecSuccess
     }
 
     // MARK: Commands

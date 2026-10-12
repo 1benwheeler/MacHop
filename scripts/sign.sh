@@ -15,7 +15,12 @@ if [[ -z "$identity" && -f "$keychain" ]]; then
     security list-keychains -d user -s $original "$keychain"
     password=$(security find-generic-password -s "MacHop signing keychain" -w)
     security unlock-keychain -p "$password" "$keychain"
-    codesign --force --sign "MacHop Local Signing" --keychain "$keychain" --identifier "$identifier" "$app"
+    # The hardened runtime stops code being injected into MacHop at launch (for example
+    # with DYLD_INSERT_LIBRARIES), which would otherwise inherit its Accessibility
+    # permission. The lab tool is left without it: it needs the camera entitlement.
+    runtime=()
+    [[ "$identifier" == local.machop ]] && runtime=(--options runtime)
+    codesign --force --sign "MacHop Local Signing" --keychain "$keychain" "${runtime[@]}" --identifier "$identifier" "$app"
     security list-keychains -d user -s $original
     trap - EXIT
 elif [[ -z "$identity" || "$identity" == "-" ]]; then
