@@ -104,6 +104,9 @@ public struct PhoneLayout: Equatable, Hashable, Sendable, Codable {
     /// Length of the phone's long side in Mac points.
     public var size: Double
     public var orientation: Orientation
+    /// Turned around: the Dynamic Island at the bottom in portrait, on the right in
+    /// landscape (instead of the top, or the left).
+    public var flipped: Bool
     /// Short side divided by long side of the phone screen (iPhone 15 Pro: 393/852).
     public var aspectRatio: Double
 
@@ -116,18 +119,44 @@ public struct PhoneLayout: Equatable, Hashable, Sendable, Codable {
     enum CodingKeys: String, CodingKey {
         // Saved before the top edge existed, when the position was always vertical.
         case edgePosition = "verticalPosition"
-        case displayID, side, size, orientation, aspectRatio
+        case displayID, side, size, orientation, flipped, aspectRatio
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        displayID = try values.decode(UInt32.self, forKey: .displayID)
+        side = try values.decode(Side.self, forKey: .side)
+        edgePosition = try values.decode(Double.self, forKey: .edgePosition)
+        size = try values.decode(Double.self, forKey: .size)
+        orientation = try values.decode(Orientation.self, forKey: .orientation)
+        // Absent in settings saved before the iPhone could be turned around.
+        flipped = try values.decodeIfPresent(Bool.self, forKey: .flipped) ?? false
+        aspectRatio = try values.decode(Double.self, forKey: .aspectRatio)
     }
 
     public init(displayID: UInt32, side: Side = .right, edgePosition: Double = 0.5,
-                size: Double = 620, orientation: Orientation = .portrait,
+                size: Double = 620, orientation: Orientation = .portrait, flipped: Bool = false,
                 aspectRatio: Double = PhoneLayout.defaultAspectRatio) {
         self.displayID = displayID
         self.side = side
         self.edgePosition = edgePosition
         self.size = size
         self.orientation = orientation
+        self.flipped = flipped
         self.aspectRatio = aspectRatio
+    }
+
+    /// Where a point on the phone as it sits (fractions of its width and height, as
+    /// drawn) lies on the iPhone's own screen. iOS places the pointer in its screen's
+    /// native frame, upright portrait, whichever way the phone is turned.
+    public func screenFraction(x: Double, y: Double) -> (x: Double, y: Double) {
+        switch (orientation, flipped) {
+        case (.portrait, false): (x, y)
+        case (.portrait, true): (1 - x, 1 - y)
+        // Turned anticlockwise, the Dynamic Island on the left: its top is the phone's left.
+        case (.landscape, false): (1 - y, x)
+        case (.landscape, true): (y, 1 - x)
+        }
     }
 
     /// The phone screen's size in Mac points for the current orientation.

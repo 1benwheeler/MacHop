@@ -451,9 +451,10 @@ public final class InputSession {
         link.send(.pointer(pointerReport(at: pointer)))
     }
 
-    private func pointerReport(at pointer: Point) -> PointerReport {
+    private func pointerReport(at pointer: Point, buttons: UInt8? = nil) -> PointerReport {
         let size = screenLink.map { ($0.phone.width, $0.phone.height) } ?? (1, 1)
-        return PointerReport(buttons: phoneButtons, x: pointer.x / max(size.0, 1), y: pointer.y / max(size.1, 1))
+        let screen = settings.layout.screenFraction(x: pointer.x / max(size.0, 1), y: pointer.y / max(size.1, 1))
+        return PointerReport(buttons: buttons ?? phoneButtons, x: screen.x, y: screen.y)
     }
 
     private func buttonChanged(_ button: MouseButton, down: Bool) -> Disposition {
@@ -682,14 +683,13 @@ public final class InputSession {
     }
 
     private func perform(_ actions: [TouchScroller.Action]) {
-        guard let screenLink else { return }
-        let size = (screenLink.phone.width, screenLink.phone.height)
+        guard screenLink != nil else { return }
         for action in actions {
             let (point, buttons): (Point, UInt8) = switch action {
             case .press(let p), .move(let p): (p, phoneButtons | MouseButton.left.hidBit)
             case .release(let p): (p, phoneButtons)
             }
-            link.send(.pointer(PointerReport(buttons: buttons, x: point.x / max(size.0, 1), y: point.y / max(size.1, 1))))
+            link.send(.pointer(pointerReport(at: point, buttons: buttons)))
         }
     }
 

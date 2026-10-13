@@ -221,6 +221,29 @@ struct InputSessionTests {
         #expect(sim.session.owner == .phone)
     }
 
+    @Test("A landscape iPhone gets the pointer in its own upright frame, so up on the Mac is up on the phone")
+    func landscapePointerFollowsHand() throws {
+        let sim = phoneAbove()
+        let link = try #require(sim.session.screenLink)
+        // Up into the phone near its right end, as Ben did.
+        sim.move(dx: link.phone.maxX - 60 - sim.cursor.location.x, dy: 200 - sim.cursor.location.y, step: 40)
+        sim.move(dx: 0, dy: -400, step: 4, stopOnOwnerChange: true)
+        sim.settle()
+        // iOS measures in upright portrait (393 × 852 here). With the Dynamic Island on the
+        // left, the landscape phone's bottom edge is its screen's left edge, and its right end
+        // is the screen's bottom.
+        #expect(sim.phone.pointer.x < 10)
+        #expect(sim.phone.pointer.y > 852 * 0.8)
+        let before = sim.phone.pointer
+        sim.move(dx: 0, dy: -60, step: 5)
+        sim.settle()
+        #expect(sim.phone.pointer.x > before.x + 20, "up on the Mac is towards the top of the landscape phone")
+        #expect(abs(sim.phone.pointer.y - before.y) < 2, "and not along it")
+        sim.move(dx: -100, dy: 0, step: 5)
+        sim.settle()
+        #expect(sim.phone.pointer.y < before.y - 20, "left on the Mac is towards the Dynamic Island")
+    }
+
     @Test("Moving along the menu bar never crosses onto an iPhone above")
     func slidingAlongMenuBar() throws {
         let sim = phoneAbove()

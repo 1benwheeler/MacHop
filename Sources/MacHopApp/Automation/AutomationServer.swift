@@ -303,6 +303,8 @@ final class AutomationServer {
         }
         if let link = session.screenLink {
             // `line` is across the edge (an x beside the screen, a y above it); `start` and `end` run along it.
+            let layout = session.settings.layout
+            result["layout"] = ["orientation": layout.orientation.rawValue, "flipped": layout.flipped]
             result["edge"] = ["line": link.edgeLine, "start": link.openSpans[0].lowerBound, "end": link.openSpans[0].upperBound,
                               "side": link.side.rawValue]
         }

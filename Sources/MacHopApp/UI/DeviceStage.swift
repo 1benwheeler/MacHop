@@ -118,9 +118,9 @@ struct DeviceStage: View {
             let free = map.view(MacHopCore.Rect(x: centre.x - size.width / 2, y: centre.y - size.height / 2,
                                                 width: size.width, height: size.height))
             context.opacity = 0.9
-            drawPhone(free, landscape: shown.orientation == .landscape, in: &context)
+            drawPhone(free, layout: shown, in: &context)
         } else {
-            drawPhone(placedPhone(link, map: map), landscape: shown.orientation == .landscape, in: &context)
+            drawPhone(placedPhone(link, map: map), layout: shown, in: &context)
         }
     }
 
@@ -165,7 +165,7 @@ struct DeviceStage: View {
                      with: .color(.white.opacity(0.35)))
     }
 
-    private func drawPhone(_ rect: CGRect, landscape: Bool, in context: inout GraphicsContext) {
+    private func drawPhone(_ rect: CGRect, layout: PhoneLayout, in context: inout GraphicsContext) {
         let radius = min(rect.width, rect.height) * 0.16
         let body = Path(roundedRect: rect, cornerRadius: radius)
         context.fill(body, with: .color(Color(white: 0.08)))
@@ -179,11 +179,12 @@ struct DeviceStage: View {
         context.fill(Path(roundedRect: screen, cornerRadius: max(1, radius - bezel)),
                      with: .linearGradient(Gradient(colors: colours), startPoint: CGPoint(x: screen.minX, y: screen.minY),
                                            endPoint: CGPoint(x: screen.maxX, y: screen.maxY)))
-        // Dynamic Island.
-        let island = landscape
-            ? CGRect(x: screen.minX + screen.width * 0.03, y: screen.midY - screen.height * 0.15,
-                     width: screen.width * 0.035, height: screen.height * 0.3)
-            : CGRect(x: screen.midX - screen.width * 0.15, y: screen.minY + screen.height * 0.025,
+        // Dynamic Island: at the top in portrait, on the left in landscape; the other end when flipped.
+        let island = layout.orientation == .landscape
+            ? CGRect(x: layout.flipped ? screen.maxX - screen.width * 0.065 : screen.minX + screen.width * 0.03,
+                     y: screen.midY - screen.height * 0.15, width: screen.width * 0.035, height: screen.height * 0.3)
+            : CGRect(x: screen.midX - screen.width * 0.15,
+                     y: layout.flipped ? screen.maxY - screen.height * 0.06 : screen.minY + screen.height * 0.025,
                      width: screen.width * 0.3, height: screen.height * 0.035)
         context.fill(Path(roundedRect: island, cornerRadius: min(island.width, island.height) / 2), with: .color(.black))
         if status == .controlling {

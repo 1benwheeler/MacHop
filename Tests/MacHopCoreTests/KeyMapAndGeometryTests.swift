@@ -255,4 +255,33 @@ struct ScrollConverterTests {
         let side = try #require(ScreenLink.snappedLayout(centre: Point(x: 1700, y: 300), base: base, displays: [main]))
         #expect(side.side == .right)
     }
+
+    // MARK: Orientation
+
+    @Test("The Dynamic Island's end of the phone, as drawn, is the top of the iPhone's own screen")
+    func screenFractionFollowsTheIsland() {
+        // Where the Dynamic Island sits in the drawing, for each way the phone can be turned.
+        let island: [(Orientation, Bool, (x: Double, y: Double))] = [
+            (.portrait, false, (0.5, 0)), (.portrait, true, (0.5, 1)),
+            (.landscape, false, (0, 0.5)), (.landscape, true, (1, 0.5)),
+        ]
+        for (orientation, flipped, point) in island {
+            let layout = PhoneLayout(displayID: 1, orientation: orientation, flipped: flipped)
+            let screen = layout.screenFraction(x: point.x, y: point.y)
+            #expect(abs(screen.x - 0.5) < 1e-9 && abs(screen.y) < 1e-9, "\(orientation), flipped \(flipped)")
+            // The four corners stay four corners.
+            let corners = [(0.0, 0.0), (1, 0), (0, 1), (1, 1)].map { layout.screenFraction(x: $0.0, y: $0.1) }
+            #expect(Set(corners.map { "\($0.x),\($0.y)" }) == ["0.0,0.0", "1.0,0.0", "0.0,1.0", "1.0,1.0"])
+        }
+    }
+
+    @Test("Turning the phone around reverses every direction")
+    func flippedReverses() {
+        for orientation in Orientation.allCases {
+            let upright = PhoneLayout(displayID: 1, orientation: orientation)
+            let flipped = PhoneLayout(displayID: 1, orientation: orientation, flipped: true)
+            let a = upright.screenFraction(x: 0.2, y: 0.7), b = flipped.screenFraction(x: 0.2, y: 0.7)
+            #expect(abs(a.x + b.x - 1) < 1e-9 && abs(a.y + b.y - 1) < 1e-9)
+        }
+    }
 }

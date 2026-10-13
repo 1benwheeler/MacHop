@@ -285,12 +285,21 @@ struct ArrangementControls: View {
             .labelsHidden().frame(width: 250)
         }
         RowDivider()
-        SettingRow(symbol: "rectangle.portrait.rotate", title: "Orientation") {
-            Picker("Orientation", selection: model.binding(\.session.layout.orientation)) {
-                Text("Portrait").tag(Orientation.portrait)
-                Text("Landscape").tag(Orientation.landscape)
+        SettingRow(symbol: "rectangle.portrait.rotate", title: "Orientation",
+                   detail: "Match the drawing to your iPhone, Dynamic Island and all.") {
+            HStack(spacing: 8) {
+                Picker("Orientation", selection: model.binding(\.session.layout.orientation)) {
+                    Text("Portrait").tag(Orientation.portrait)
+                    Text("Landscape").tag(Orientation.landscape)
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 190)
+                Button {
+                    withAnimation(.snappy) { model.update { $0.session.layout.flipped.toggle() } }
+                } label: {
+                    Label("Flip", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .help("Turn your iPhone around in the drawing")
             }
-            .pickerStyle(.segmented).labelsHidden().frame(width: 190)
         }
         RowDivider()
         SettingRow(symbol: "cursorarrow.motionlines", title: "Pointer speed on iPhone",

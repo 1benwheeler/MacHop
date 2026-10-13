@@ -90,6 +90,7 @@ public final class Driver {
 
     public func click(button: Int = 0) throws {
         guard owner == "phone" else { throw DriverError.notOnPhone }
+        guard LabEdge.isUpright(status: try status()) else { throw Lab.SafetyError.notUpright }
         try app.send(["cmd": "post.click", "button": button])
     }
 
@@ -119,6 +120,12 @@ struct LabEdge {
     }
 
     var outward: Double { side == "right" ? 1 : -1 }
+
+    /// True when MacHop's iPhone is upright portrait, so the lab's screen readings line up with the pointer.
+    static func isUpright(status: [String: Any]) -> Bool {
+        let layout = status["layout"] as? [String: Any]
+        return (layout?["orientation"] as? String) == "portrait" && (layout?["flipped"] as? Bool) == false
+    }
     var horizontal: Bool { side == "top" }
 
     /// The Mac point `along` the edge, `inside` points in from it.

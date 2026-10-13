@@ -17,8 +17,12 @@ public final class Lab {
 
     public enum SafetyError: Error, CustomStringConvertible {
         case wrongScreen(expected: String)
+        case notUpright
         public var description: String {
             switch self {
+            case .notUpright:
+                "Stopped: set MacHop's iPhone to Portrait, not flipped. The lab aims at what it reads on the " +
+                "iPhone's screen, which only lines up with an upright iPhone."
             case .wrongScreen(let expected):
                 "Stopped: the iPhone is not showing \(expected). Open it on the phone and run again " +
                 "(the lab never sends input to other apps, e.g. messaging)."
@@ -32,6 +36,7 @@ public final class Lab {
     /// Refuses to continue unless the phone shows the expected app.
     public func requireExpectedScreen(_ expected: String? = nil) throws {
         let required = expected ?? requiredScreenText
+        if !LabEdge.isUpright(status: try app.status()) { throw SafetyError.notUpright }
         let text = screen.recognizedText()
         guard text.contains(where: { $0.trimmingCharacters(in: .whitespaces) == required }) else {
             throw SafetyError.wrongScreen(expected: required)
