@@ -203,7 +203,8 @@ private struct PhonePage: View {
         PageFrame(overline: "Your iPhone",
                   title: model.settings.phoneID == nil ? "Connect your iPhone" : model.phoneName,
                   subtitle: StatusText.detail(model)) {
-            // Until the iPhone is connected, connecting it is the first thing to do.
+            // Until an iPhone is chosen, choosing one is the first thing to do. After that the section stays put,
+            // so a brief reconnect doesn't reshuffle the page; the status bar below the drawing shows it instead.
             if needsConnection { connection }
             Panel(padding: 0) {
                 DeviceStage(displays: model.displays, layout: model.settings.session.layout, status: model.stageState) { layout in
@@ -245,7 +246,7 @@ private struct PhonePage: View {
         }
     }
 
-    private var needsConnection: Bool { model.settings.phoneID == nil || !model.phoneReady }
+    private var needsConnection: Bool { model.settings.phoneID == nil }
 
     @ViewBuilder private var connection: some View {
         sectionTitle("Connection")
