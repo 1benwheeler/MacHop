@@ -173,6 +173,17 @@ struct SettingsTests {
         #expect(!settings.session.mediaKeysToPhone)
         #expect(settings.session.scroll.style == .drag)
         #expect(settings.session.layout.size == 620)
+        #expect(settings.gestureSetup == nil)
+    }
+
+    @Test("The setup guide remembers the gestures step, finished or skipped")
+    func gestureSetupIsRemembered() throws {
+        for choice in [AppSettings.GestureSetup.done, .skipped] {
+            var settings = AppSettings.defaultSettings(mainDisplay: 1)
+            settings.gestureSetup = choice
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+            #expect(decoded.gestureSetup == choice)
+        }
     }
 
     @Test("The setup guide opens for new users, not for people who already chose an iPhone")

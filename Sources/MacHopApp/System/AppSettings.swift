@@ -17,6 +17,11 @@ nonisolated struct AppSettings: Codable, Equatable {
     var screen: IPhoneScreen?
     /// The model identifier the iPhone last reported (e.g. "iPhone16,1").
     var phoneModel: String?
+    /// The gestures step of the setup guide, once finished. MacHop can't see the
+    /// iPhone's AssistiveTouch settings, so this is remembered instead.
+    var gestureSetup: GestureSetup?
+
+    enum GestureSetup: String, Codable { case done, skipped }
 
     /// Whether to show the setup guide at launch. Settings from before the guide
     /// existed count as set up once an iPhone has been chosen.

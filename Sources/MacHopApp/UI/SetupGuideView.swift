@@ -18,7 +18,6 @@ struct SetupGuideView: View {
     @State private var showingPhones = false
     @State private var gestureStart = ProcessInfo.processInfo.systemUptime
     @State private var gesturesSent: Set<InputSession.PhoneAction> = []
-    @State private var gesturesSkipped = false
     @State private var openAtLogin = true
     @State private var expanded: Step?
 
@@ -55,6 +54,7 @@ struct SetupGuideView: View {
         }
         .onChange(of: model.lastPhoneAction?.time) { _, _ in
             if let sent = model.lastPhoneAction, sent.time >= gestureStart { gesturesSent.insert(sent.action) }
+            if gesturesSent.count == 3, model.settings.gestureSetup == nil { model.update { $0.gestureSetup = .done } }
         }
     }
 
@@ -202,7 +202,7 @@ struct SetupGuideView: View {
         case .phone: model.settings.phoneID != nil && model.phoneReady
         case .assistiveTouch: assistiveTouchOn || model.settings.hasCrossed == true
         case .tryIt: model.settings.hasCrossed == true
-        case .gestures: gesturesSkipped || gesturesSent.count == 3
+        case .gestures: model.settings.gestureSetup != nil || gesturesSent.count == 3
         }
     }
 
@@ -242,7 +242,7 @@ struct SetupGuideView: View {
     private func summary(_ step: Step, done: Bool) -> String? {
         switch step {
         case .phone where done: "Connected to \(model.phoneName)"
-        case .gestures where gesturesSkipped: "Skipped"
+        case .gestures where model.settings.gestureSetup == .skipped: "Skipped"
         case .gestures where done: "Home, App Switcher and Notification Centre"
         case .gestures: "Swipe up for Home, like on an iPad"
         default: nil
@@ -310,9 +310,13 @@ struct SetupGuideView: View {
             gestureStep(.notificationCentre, "Once more, swipe down, then choose **Notification Centre**.")
         }
         HStack {
-            Button("Skip") { withAnimation { gesturesSkipped = true } }
-            if !gesturesSent.isEmpty {
+            if model.settings.gestureSetup == nil {
+                Button("Already Set Up") { withAnimation { model.update { $0.gestureSetup = .done } } }
+                Button("Skip") { withAnimation { model.update { $0.gestureSetup = .skipped } } }
+            }
+            if !gesturesSent.isEmpty || model.settings.gestureSetup != nil {
                 Button("Start Over") {
+                    model.update { $0.gestureSetup = nil }
                     gesturesSent = []
                     gestureStart = ProcessInfo.processInfo.systemUptime
                 }
@@ -321,7 +325,7 @@ struct SetupGuideView: View {
     }
 
     private func gestureStep(_ action: InputSession.PhoneAction, _ text: LocalizedStringKey) -> some View {
-        let sent = gesturesSent.contains(action)
+        let sent = gesturesSent.contains(action) || model.settings.gestureSetup == .done
         return HStack(alignment: .top, spacing: 8) {
             Image(systemName: sent ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(sent ? Color.green : Color.secondary)
