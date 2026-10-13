@@ -139,7 +139,7 @@ enum StatusText {
     }
 
     static func detail(_ model: AppModel) -> String {
-        let side = model.settings.session.layout.side == .right ? "right" : "left"
+        let side = model.settings.session.layout.side.rawValue
         switch model.status {
         case .controlling: return "Move back across the edge, or press ⌃⌥⌘⎋, to return."
         case .ready: return "Move the pointer past the \(side) edge of your screen."

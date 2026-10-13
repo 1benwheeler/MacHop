@@ -168,8 +168,10 @@ final class AutomationServer {
             return ["ok": true, "launchAtLogin": model.launchAtLogin]
 
         case "enter":
-            let y = request["y"] as? Double ?? session.screenLink.map { ($0.openSpans[0].lowerBound + $0.openSpans[0].upperBound) / 2 } ?? 0
-            return ["ok": session.enterPhone(atMacY: y)]
+            // `position` along the shared edge (a y beside the screen, an x above it); the middle by default.
+            let position = request["position"] as? Double
+                ?? session.screenLink.map { ($0.openSpans[0].lowerBound + $0.openSpans[0].upperBound) / 2 } ?? 0
+            return ["ok": session.enterPhone(atEdge: position)]
 
         case "return":
             session.returnToMac(.requested)
@@ -300,7 +302,8 @@ final class AutomationServer {
             result["phonePointer"] = ["x": pointer.x / link.phone.width, "y": pointer.y / link.phone.height]
         }
         if let link = session.screenLink {
-            result["edge"] = ["x": link.edgeColumn, "top": link.openSpans[0].lowerBound, "bottom": link.openSpans[0].upperBound,
+            // `line` is across the edge (an x beside the screen, a y above it); `start` and `end` run along it.
+            result["edge"] = ["line": link.edgeLine, "start": link.openSpans[0].lowerBound, "end": link.openSpans[0].upperBound,
                               "side": link.side.rawValue]
         }
         return result

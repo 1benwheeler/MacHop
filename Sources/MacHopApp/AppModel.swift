@@ -394,6 +394,11 @@ final class AppModel {
         settings.phoneModel = "iPhone16,1"
         settings.hasCrossed = true
         settings.paused = false
+        // `--demo-top`: a landscape iPhone above the screen.
+        if CommandLine.arguments.contains("--demo-top") {
+            settings.session.layout.side = .top
+            settings.session.layout.orientation = .landscape
+        }
     }
 
     /// Chooses the iPhone's screen (or automatic, from the model it reports) and sizes the layout to it.

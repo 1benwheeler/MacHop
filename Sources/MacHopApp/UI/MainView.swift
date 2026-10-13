@@ -214,8 +214,9 @@ private struct PhonePage: View {
                 .accessibilityActions {
                     Button("Move iPhone to the left side") { model.update { $0.session.layout.side = .left } }
                     Button("Move iPhone to the right side") { model.update { $0.session.layout.side = .right } }
-                    Button("Move iPhone up") { nudge(-0.1) }
-                    Button("Move iPhone down") { nudge(0.1) }
+                    Button("Move iPhone to the top") { model.update { $0.session.layout.side = .top } }
+                    Button(model.settings.session.layout.side.isHorizontal ? "Move iPhone left" : "Move iPhone up") { nudge(-0.1) }
+                    Button(model.settings.session.layout.side.isHorizontal ? "Move iPhone right" : "Move iPhone down") { nudge(0.1) }
                 }
                 Text("Drag your iPhone to where it sits beside your Mac.")
                     .font(.system(size: 12.5))
@@ -244,13 +245,14 @@ private struct PhonePage: View {
     }
 
     private func nudge(_ amount: Double) {
-        model.update { $0.session.layout.verticalPosition = min(1, max(0, $0.session.layout.verticalPosition + amount)) }
+        model.update { $0.session.layout.edgePosition = min(1, max(0, $0.session.layout.edgePosition + amount)) }
     }
 
     private var arrangementDescription: String {
         let layout = model.settings.session.layout
-        return "iPhone on the \(layout.side == .right ? "right" : "left") of the screen, " +
-            "\(Int(layout.verticalPosition * 100)) percent of the way down"
+        let percent = Int(layout.edgePosition * 100)
+        return layout.side == .top ? "iPhone above the screen, \(percent) percent of the way across"
+            : "iPhone on the \(layout.side.rawValue) of the screen, \(percent) percent of the way down"
     }
 
     @ViewBuilder private var primaryActions: some View {

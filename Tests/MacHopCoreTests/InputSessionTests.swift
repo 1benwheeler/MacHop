@@ -12,7 +12,7 @@ struct InputSessionTests {
     @Test("Pushing through the edge hands input to the phone; resistance prevents grazing")
     func crossing() throws {
         let link = try #require(sim.session.screenLink)
-        sim.move(dx: link.edgeColumn - sim.cursor.location.x, dy: 0, step: 40)
+        sim.move(dx: link.edgeLine - sim.cursor.location.x, dy: 0, step: 40)
         #expect(sim.session.owner == .mac)
         // A push smaller than the resistance stays on the Mac.
         sim.move(dx: sim.session.settings.edgeResistance - 1, dy: 0, step: 1)
@@ -63,7 +63,7 @@ struct InputSessionTests {
     @Test("Moving inward resets edge pressure")
     func inwardResetsPressure() throws {
         let link = try #require(sim.session.screenLink)
-        sim.move(dx: link.edgeColumn - sim.cursor.location.x, dy: 0, step: 40)
+        sim.move(dx: link.edgeLine - sim.cursor.location.x, dy: 0, step: 40)
         for _ in 0..<10 {
             sim.move(dx: 4, dy: 0, step: 4)
             sim.move(dx: -4, dy: 0, step: 4)
@@ -82,7 +82,7 @@ struct InputSessionTests {
         sim.session.setEnabled(true)
 
         let link = try #require(sim.session.screenLink)
-        sim.move(dx: link.edgeColumn - sim.cursor.location.x, dy: 950 - sim.cursor.location.y, step: 40)
+        sim.move(dx: link.edgeLine - sim.cursor.location.x, dy: 950 - sim.cursor.location.y, step: 40)
         sim.move(dx: 80, dy: 0, step: 4)   // below the phone (span ends at 801)
         #expect(sim.session.owner == .mac)
         #expect(sim.crossToPhone())
@@ -98,7 +98,7 @@ struct InputSessionTests {
         #expect(!sim.cursor.isHidden)
         #expect(abs(sim.cursor.location.y - (link.phone.minY + phoneY)) <= 1)
         // At the edge, plus at most the last step's movement past the resistance.
-        #expect(abs(sim.cursor.location.x - link.edgeColumn) <= 6)
+        #expect(abs(sim.cursor.location.x - link.edgeLine) <= 6)
         #expect(sim.ownerChanges.last?.1 == .edge)
     }
 
@@ -121,7 +121,7 @@ struct InputSessionTests {
         let out = link.side.outward
         let y = link.phone.midY
         // Slow push: lands at the phone's edge.
-        sim.move(dx: link.edgeColumn - 40 * out - sim.cursor.location.x, dy: y - sim.cursor.location.y, step: 40)
+        sim.move(dx: link.edgeLine - 40 * out - sim.cursor.location.x, dy: y - sim.cursor.location.y, step: 40)
         sim.move(dx: 60 * out, dy: 0, step: 2, stopOnOwnerChange: true)
         let slow = try #require(sim.session.phonePointer)
         #expect(abs(slow.x - (out > 0 ? 2 : link.phone.width - 2)) <= 3)
@@ -129,7 +129,7 @@ struct InputSessionTests {
         sim.settle(InputSession.exitCooldown)
         // Flick: one 140-point event from 100 points away. 40 points pass the edge,
         // 6 of them are the resistance, and the rest carry onto the phone.
-        sim.move(dx: link.edgeColumn - 100 * out - sim.cursor.location.x, dy: 0, step: 40)
+        sim.move(dx: link.edgeLine - 100 * out - sim.cursor.location.x, dy: 0, step: 40)
         sim.move(dx: 140 * out, dy: 0, step: 140)
         #expect(sim.session.owner == .phone)
         let fast = try #require(sim.session.phonePointer)
@@ -138,7 +138,7 @@ struct InputSessionTests {
         // A flick back carries onto the Mac too.
         sim.move(dx: -(inward + 60) * out, dy: 0, step: inward + 60)
         #expect(sim.session.owner == .mac)
-        #expect(abs((link.edgeColumn - sim.cursor.location.x) * out - 54) < 1)
+        #expect(abs((link.edgeLine - sim.cursor.location.x) * out - 54) < 1)
     }
 
     @Test("Returning releases a held button where it is and leaves the phone's pointer there")
@@ -166,7 +166,7 @@ struct InputSessionTests {
     func fastBackAndForth() throws {
         let link = try #require(sim.session.screenLink)
         let out = link.side.outward
-        sim.move(dx: link.edgeColumn - 60 * out - sim.cursor.location.x, dy: link.phone.midY - sim.cursor.location.y, step: 40)
+        sim.move(dx: link.edgeLine - 60 * out - sim.cursor.location.x, dy: link.phone.midY - sim.cursor.location.y, step: 40)
         for trip in 1...10 {
             // About 40 points per event, as in Ben's flicks; back on the Mac 0.1 s after returning.
             sim.move(dx: 160 * out, dy: 0, step: 40, stopOnOwnerChange: true)
@@ -176,6 +176,59 @@ struct InputSessionTests {
             sim.settle(0.1)
         }
         #expect(sim.ownerChanges.count == 20)
+    }
+
+    // MARK: iPhone above the screen
+
+    /// A landscape iPhone above the middle of the default 1512 × 982 display.
+    private func phoneAbove(resistance: Double = 6) -> Simulation {
+        Simulation(settings: SessionSettings(layout: PhoneLayout(displayID: 1, side: .top, orientation: .landscape),
+                                             edgeResistance: resistance))
+    }
+
+    @Test("An iPhone above the screen: push up to cross, come back down at the matching place")
+    func phoneAboveRoundTrip() throws {
+        let sim = phoneAbove()
+        let link = try #require(sim.session.screenLink)
+        #expect(link.phone.maxY == 0 && link.phone.width > link.phone.height, "landscape, sitting on the top edge")
+        sim.move(dx: 600 - sim.cursor.location.x, dy: 200 - sim.cursor.location.y, step: 40)
+        sim.move(dx: 0, dy: -400, step: 4, stopOnOwnerChange: true)
+        #expect(sim.session.owner == .phone)
+        let entry = try #require(sim.session.phonePointer)
+        #expect(abs(link.phone.minX + entry.x - 600) < 1, "enters at the same x")
+        #expect(entry.y > link.phone.height - 5, "on the phone's bottom edge, facing the Mac")
+        // Along the phone, then back down through its bottom edge.
+        sim.move(dx: 150, dy: -40, step: 5)
+        let phoneX = try #require(sim.session.phonePointer?.x)
+        sim.move(dx: 0, dy: link.phone.height + 100, step: 4, stopOnOwnerChange: true)
+        #expect(sim.session.owner == .mac)
+        #expect(abs(sim.cursor.location.x - (link.phone.minX + phoneX)) <= 1)
+        #expect(sim.cursor.location.y < 10, "lands at the top of the screen")
+    }
+
+    @Test("Flinging the pointer at the menu bar doesn't land on an iPhone above; pushing on does")
+    func menuBarFlingStaysOnMac() throws {
+        let sim = phoneAbove(resistance: 0)
+        sim.move(dx: 756 - sim.cursor.location.x, dy: 500 - sim.cursor.location.y, step: 40)
+        // One fast event that would carry the pointer 300 points past the top.
+        sim.move(dx: 0, dy: -800, step: 800)
+        #expect(sim.cursor.location.y == 0)
+        #expect(sim.session.owner == .mac, "arriving movement doesn't count at the top")
+        // With resistance None, the top edge still needs a medium push.
+        sim.move(dx: 0, dy: -(InputSession.menuBarResistance - 2), step: 2)
+        #expect(sim.session.owner == .mac)
+        sim.move(dx: 0, dy: -4, step: 2)
+        #expect(sim.session.owner == .phone)
+    }
+
+    @Test("Moving along the menu bar never crosses onto an iPhone above")
+    func slidingAlongMenuBar() throws {
+        let sim = phoneAbove()
+        let link = try #require(sim.session.screenLink)
+        sim.move(dx: link.phone.minX - 100 - sim.cursor.location.x, dy: -sim.cursor.location.y, step: 40)
+        // Mostly sideways, drifting up: the pointer slides along under the iPhone.
+        sim.move(dx: link.phone.width + 200, dy: -60, step: 6)
+        #expect(sim.session.owner == .mac)
     }
 
     @Test("After ⌃⌥⌘⎋, a hand still moving towards the phone doesn't carry input straight back")
@@ -188,7 +241,7 @@ struct InputSessionTests {
         sim.keyUp(KeyMap.escapeKeyCode)
         sim.releaseModifier(55); sim.releaseModifier(58); sim.releaseModifier(59)
         #expect(sim.session.owner == .mac)
-        #expect(abs((link.edgeColumn - sim.cursor.location.x) * out - InputSession.exitInset) < 1, "lands inside the screen")
+        #expect(abs((link.edgeLine - sim.cursor.location.x) * out - InputSession.exitInset) < 1, "lands inside the screen")
         // Still pushing towards the phone, 0.15 s later.
         sim.settle(0.15)
         sim.move(dx: 80 * out, dy: 0, step: 4)
@@ -413,8 +466,8 @@ struct InputSessionTests {
         let link = try #require(sim.session.screenLink)
         let out = link.side.outward
         let farY = link.phone.maxY + ScreenLink.snapMargin + 20
-        try #require(farY < link.display.maxY - 1 && !link.isOpen(atY: farY))
-        sim.move(dx: link.edgeColumn - 40 * out - sim.cursor.location.x, dy: farY - sim.cursor.location.y, step: 40)
+        try #require(farY < link.display.maxY - 1 && !link.isOpen(along: farY))
+        sim.move(dx: link.edgeLine - 40 * out - sim.cursor.location.x, dy: farY - sim.cursor.location.y, step: 40)
         sim.move(dx: 80 * out, dy: 0, step: 4)
         #expect(sim.session.owner == .mac, "a wall well below the phone")
         // Ben's case: pushing a few points below the bottom of the phone.
@@ -441,7 +494,7 @@ struct InputSessionTests {
     func slideAlongMacEdge() throws {
         let link = try #require(sim.session.screenLink)
         let out = link.side.outward
-        sim.move(dx: link.edgeColumn - sim.cursor.location.x, dy: link.phone.minY + 60 - sim.cursor.location.y, step: 40)
+        sim.move(dx: link.edgeLine - sim.cursor.location.x, dy: link.phone.minY + 60 - sim.cursor.location.y, step: 40)
         for _ in 0..<20 { sim.move(dx: 2 * out, dy: 10, step: 20) }
         #expect(sim.session.owner == .mac)
         sim.move(dx: 30 * out, dy: 0, step: 4, stopOnOwnerChange: true)

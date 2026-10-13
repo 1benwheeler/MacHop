@@ -255,11 +255,12 @@ public final class Simulation {
     public func crossToPhone(atFraction fraction: Double = 0.5) -> Bool {
         guard let link = session.screenLink else { return false }
         let span = link.openSpans[0]
-        let y = span.lowerBound + (span.upperBound - span.lowerBound) * fraction
-        let edgeX = link.edgeColumn - 40 * link.side.outward
+        let along = span.lowerBound + (span.upperBound - span.lowerBound) * fraction
+        let start = Point(along: along, across: link.edgeLine, side: link.side).offset(outward: -40, through: link.side)
         // Arrive near the edge from the interior, then push outward through it.
-        move(dx: edgeX - cursor.location.x, dy: y - cursor.location.y, step: 40)
-        move(dx: 80 * link.side.outward, dy: 0, step: 4, stopOnOwnerChange: true)
+        move(dx: start.x - cursor.location.x, dy: start.y - cursor.location.y, step: 40)
+        let push = Point.zero.offset(outward: 80, through: link.side)
+        move(dx: push.x, dy: push.y, step: 4, stopOnOwnerChange: true)
         return session.owner == .phone
     }
 
@@ -267,8 +268,8 @@ public final class Simulation {
     @discardableResult
     public func returnToMac() -> Bool {
         guard let link = session.screenLink, session.owner == .phone else { return session.owner == .mac }
-        let distance = link.phone.width + 60
-        move(dx: -distance * link.side.outward, dy: 0, step: 6, stopOnOwnerChange: true)
+        let back = Point.zero.offset(outward: -(link.phoneDepth + 60), through: link.side)
+        move(dx: back.x, dy: back.y, step: 6, stopOnOwnerChange: true)
         return session.owner == .mac
     }
 

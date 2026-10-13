@@ -83,60 +83,69 @@ struct SimulationTests {
         #expect(!sim.macEvents.contains { if case .button = $0 { true } else { false } })
     }
 
-    @Test("Thousands of edge transitions across random layouts, speeds and display arrangements")
+    @Test("Thousands of edge transitions across random layouts, edges, speeds and display arrangements")
     func randomTransitions() {
         var random = SeededRandom(seed: 0x4D61_6348_6F70)
         var crossings = 0
         var layoutsTested = 0
-        for layoutIndex in 0..<40 {
+        var sidesTested: Set<Side> = []
+        for layoutIndex in 0..<60 {
             let side = Side.allCases.randomElement(using: &random)!
             let main = Display(id: 1, frame: Rect(x: 0, y: 0, width: Double.random(in: 1024...2560, using: &random),
                                                   height: Double.random(in: 640...1440, using: &random)))
             var displays = [main]
             // Sometimes another display shares part of the same edge.
             if Bool.random(using: &random) {
-                let height = Double.random(in: 200...600, using: &random)
-                let x = side == .right ? main.frame.maxX : main.frame.minX - 1200
-                let y = Double.random(in: -300...main.frame.maxY - 100, using: &random)
-                displays.append(Display(id: 2, frame: Rect(x: x, y: y, width: 1200, height: height)))
+                let length = Double.random(in: 200...600, using: &random)
+                let start = Double.random(in: -300...main.frame.along(side).max - 100, using: &random)
+                let bounds = main.frame.across(side)
+                let corner = Point(along: start, across: side.outward > 0 ? bounds.max : bounds.min - 1200, side: side)
+                let size = Point(along: length, across: 1200, side: side)
+                displays.append(Display(id: 2, frame: Rect(x: corner.x, y: corner.y, width: size.x, height: size.y)))
             }
             let layout = PhoneLayout(displayID: 1, side: side,
-                                     verticalPosition: Double.random(in: 0...1, using: &random),
+                                     edgePosition: Double.random(in: 0...1, using: &random),
                                      size: Double.random(in: 300...1400, using: &random),
                                      orientation: Bool.random(using: &random) ? .portrait : .landscape)
             let settings = SessionSettings(layout: layout, edgeResistance: Double.random(in: 0...30, using: &random))
             let sim = Simulation(settings: settings, displays: displays)
             guard let link = sim.session.screenLink else { continue }
             layoutsTested += 1
+            sidesTested.insert(side)
+            let resistance = max(settings.edgeResistance, side == .top ? InputSession.menuBarResistance : 0)
             for trip in 0..<50 {
-                let context = "layout \(layoutIndex) trip \(trip)"
+                let context = "layout \(layoutIndex) (\(side)) trip \(trip)"
                 let span = link.openSpans.randomElement(using: &random)!
-                let y = Double.random(in: span.lowerBound..<span.upperBound, using: &random)
+                let position = Double.random(in: span.lowerBound..<span.upperBound, using: &random)
                 let speed = Double.random(in: 1...60, using: &random)
-                // Approach from inside, then push out at a random speed.
-                sim.move(dx: link.edgeColumn - 80 * side.outward - sim.cursor.location.x,
-                         dy: y - sim.cursor.location.y, step: 60)
-                sim.move(dx: (120 + settings.edgeResistance) * side.outward, dy: 0, step: speed,
-                         stopOnOwnerChange: true)
-                #expect(sim.session.owner == .phone, "\(context): did not cross at y \(y)")
+                // Approach from inside, then push out at a random speed. At the top, the
+                // movement that arrives at the edge doesn't count, so push one step further.
+                let start = Point(along: position, across: link.edgeLine, side: side).offset(outward: -80, through: side)
+                sim.move(dx: start.x - sim.cursor.location.x, dy: start.y - sim.cursor.location.y, step: 60)
+                let push = Point.zero.offset(outward: 120 + resistance + speed, through: side)
+                sim.move(dx: push.x, dy: push.y, step: speed, stopOnOwnerChange: true)
+                #expect(sim.session.owner == .phone, "\(context): did not cross at \(position)")
                 checkInvariants(sim, context)
                 guard sim.session.owner == .phone, let entry = sim.session.phonePointer else { continue }
                 crossings += 1
-                #expect(abs((link.phone.minY + entry.y) - y) <= max(speed, 2) + 1, "\(context): entry height")
+                #expect(abs(link.phone.along(side).min + entry.along(side) - position) <= max(speed, 2) + 1, "\(context): entry position")
                 // Wander on the phone, away from the Mac so input stays there.
-                sim.move(dx: Double.random(in: 0...150, using: &random) * side.outward,
-                         dy: Double.random(in: -200...200, using: &random), step: speed)
+                let wander = Point(along: Double.random(in: -200...200, using: &random),
+                                   across: Double.random(in: 0...150, using: &random) * side.outward, side: side)
+                sim.move(dx: wander.x, dy: wander.y, step: speed)
                 #expect(sim.session.owner == .phone, "\(context): left the phone while wandering")
-                let phoneY = sim.session.phonePointer?.y ?? 0
-                sim.move(dx: -(link.phone.width + 200) * side.outward, dy: 0, step: speed, stopOnOwnerChange: true)
+                let phoneAlong = sim.session.phonePointer?.along(side) ?? 0
+                let back = Point.zero.offset(outward: -(link.phoneDepth + 200), through: side)
+                sim.move(dx: back.x, dy: back.y, step: speed, stopOnOwnerChange: true)
                 #expect(sim.session.owner == .mac, "\(context): did not return")
                 checkInvariants(sim, context)
-                let expected = link.returnPoint(phoneY: phoneY)
-                #expect(abs(sim.cursor.location.y - expected.y) <= 1, "\(context): return height")
+                let expected = link.returnPoint(phoneAlong: phoneAlong)
+                #expect(abs(sim.cursor.location.along(side) - expected.along(side)) <= 1, "\(context): return position")
                 sim.settle(InputSession.crossingCooldown)
             }
         }
-        #expect(layoutsTested >= 30)
+        #expect(layoutsTested >= 45)
+        #expect(sidesTested == Set(Side.allCases))
         #expect(crossings == layoutsTested * 50)
     }
 

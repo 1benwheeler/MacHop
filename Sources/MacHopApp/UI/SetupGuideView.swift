@@ -164,7 +164,7 @@ struct SetupGuideView: View {
 
     /// Everything done, gestures included.
     private var finished: some View {
-        let side = model.settings.session.layout.side == .right ? "right" : "left"
+        let side = model.settings.session.layout.side.rawValue
         return Panel(padding: 24) {
             HStack(spacing: 14) {
                 IconTile(symbol: "checkmark", size: 44, tint: .green)
@@ -274,7 +274,7 @@ struct SetupGuideView: View {
                 Button("It's On") { withAnimation { assistiveTouchOn = true } }.buttonStyle(.borderedProminent)
             }
         case .tryIt:
-            let side = model.settings.session.layout.side == .right ? "right" : "left"
+            let side = model.settings.session.layout.side.rawValue
             explain("Move the pointer past the \(side) edge of your screen. Come back the same way, or press ⌃⌥⌘⎋ at any time.")
             if !isDone(.tryIt) { waiting("Waiting for you to move onto your iPhone…") }
         case .gestures:

@@ -14,6 +14,21 @@ public struct Point: Equatable, Hashable, Sendable, Codable {
 
     public static let zero = Point(x: 0, y: 0)
     public var isFinite: Bool { x.isFinite && y.isFinite }
+
+    /// A point given relative to an edge on `side`: `along` it and `across` it.
+    public init(along: Double, across: Double, side: Side) {
+        self = side.isHorizontal ? Point(x: along, y: across) : Point(x: across, y: along)
+    }
+
+    /// The coordinate along an edge on `side`: y beside the screen, x above it.
+    public func along(_ side: Side) -> Double { side.isHorizontal ? x : y }
+    /// The coordinate across an edge on `side`: x beside the screen, y above it.
+    public func across(_ side: Side) -> Double { side.isHorizontal ? y : x }
+
+    /// This point moved `distance` outward through an edge on `side` (negative moves inward).
+    public func offset(outward distance: Double, through side: Side) -> Point {
+        Point(along: along(side), across: across(side) + distance * side.outward, side: side)
+    }
 }
 
 public struct Rect: Equatable, Hashable, Sendable, Codable {
@@ -40,6 +55,11 @@ public struct Rect: Equatable, Hashable, Sendable, Codable {
         x.isFinite && y.isFinite && width.isFinite && height.isFinite && width > 0 && height > 0
     }
 
+    /// The rectangle's extent along an edge on `side` (its y range beside the screen, x range above it).
+    public func along(_ side: Side) -> (min: Double, max: Double) { side.isHorizontal ? (minX, maxX) : (minY, maxY) }
+    /// The rectangle's extent across an edge on `side`.
+    public func across(_ side: Side) -> (min: Double, max: Double) { side.isHorizontal ? (minY, maxY) : (minX, maxX) }
+
     /// Half-open containment, matching how the cursor occupies pixels.
     public func contains(_ point: Point) -> Bool {
         point.x >= minX && point.x < maxX && point.y >= minY && point.y < maxY
@@ -56,11 +76,15 @@ public struct Display: Equatable, Hashable, Sendable, Identifiable {
     }
 }
 
+/// The display edge the iPhone sits against.
 public enum Side: String, Codable, Sendable, CaseIterable {
-    case left, right
+    case left, right, top
 
-    /// +1 when moving outward through this side means increasing x.
+    /// +1 when moving outward through this side increases the coordinate across
+    /// the edge (x beside the screen, y above it); -1 when it decreases it.
     public var outward: Double { self == .right ? 1 : -1 }
+    /// True for the top edge, which runs left to right.
+    public var isHorizontal: Bool { self == .top }
 }
 
 public enum Orientation: String, Codable, Sendable, CaseIterable {
@@ -75,8 +99,8 @@ public enum Orientation: String, Codable, Sendable, CaseIterable {
 public struct PhoneLayout: Equatable, Hashable, Sendable, Codable {
     public var displayID: UInt32
     public var side: Side
-    /// Centre of the phone along the shared edge: 0 = top of the display, 1 = bottom.
-    public var verticalPosition: Double
+    /// Centre of the phone along the shared edge: 0 = its top (or left) end, 1 = its bottom (or right) end.
+    public var edgePosition: Double
     /// Length of the phone's long side in Mac points.
     public var size: Double
     public var orientation: Orientation
@@ -89,12 +113,18 @@ public struct PhoneLayout: Equatable, Hashable, Sendable, Codable {
     public static let referenceSize = 620.0
     public static let defaultAspectRatio = 393.0 / 852.0
 
-    public init(displayID: UInt32, side: Side = .right, verticalPosition: Double = 0.5,
+    enum CodingKeys: String, CodingKey {
+        // Saved before the top edge existed, when the position was always vertical.
+        case edgePosition = "verticalPosition"
+        case displayID, side, size, orientation, aspectRatio
+    }
+
+    public init(displayID: UInt32, side: Side = .right, edgePosition: Double = 0.5,
                 size: Double = 620, orientation: Orientation = .portrait,
                 aspectRatio: Double = PhoneLayout.defaultAspectRatio) {
         self.displayID = displayID
         self.side = side
-        self.verticalPosition = verticalPosition
+        self.edgePosition = edgePosition
         self.size = size
         self.orientation = orientation
         self.aspectRatio = aspectRatio
@@ -109,7 +139,7 @@ public struct PhoneLayout: Equatable, Hashable, Sendable, Codable {
     /// Clamps every field to a usable range. Saved settings pass through this.
     public func sanitized() -> PhoneLayout {
         var copy = self
-        copy.verticalPosition = verticalPosition.isFinite ? min(1, max(0, verticalPosition)) : 0.5
+        copy.edgePosition = edgePosition.isFinite ? min(1, max(0, edgePosition)) : 0.5
         copy.size = size.isFinite ? min(Self.sizeRange.upperBound, max(Self.sizeRange.lowerBound, size)) : 620
         copy.aspectRatio = aspectRatio.isFinite ? min(1, max(0.3, aspectRatio)) : Self.defaultAspectRatio
         return copy
@@ -117,11 +147,14 @@ public struct PhoneLayout: Equatable, Hashable, Sendable, Codable {
 }
 
 /// The resolved relationship between one Mac display and the virtual phone.
+///
+/// Edge positions are given `along` the shared edge (y beside the screen, x above
+/// it) and `across` it, so the same rules serve the side and top edges.
 public struct ScreenLink: Equatable, Sendable {
     public let display: Rect
     public let phone: Rect
     public let side: Side
-    /// The part of the edge the phone shares with the display, as y ranges.
+    /// The part of the edge the phone shares with the display, as ranges along it.
     /// Segments covered by another real display stay with that display.
     public let openSpans: [ClosedRange<Double>]
     /// Where pushing against the edge crosses: the shared edge plus a margin past
@@ -131,56 +164,63 @@ public struct ScreenLink: Equatable, Sendable {
 
     /// How far past each end of the phone a push still crosses.
     public static let snapMargin = 80.0
-    /// The margin never reaches this close to the display's top or bottom, which
-    /// belong to the menu bar and the hot corners.
+    /// The margin never reaches this close to either end of the edge, which belong
+    /// to the menu bar, the Dock and the hot corners.
     public static let cornerGuard = 40.0
 
-    /// x of the display column the cursor occupies at the shared edge.
-    public var edgeColumn: Double { side == .right ? display.maxX - 1 : display.minX }
+    /// Across the edge: the display's outermost row or column of pixels at the shared edge.
+    public var edgeLine: Double { side.outward > 0 ? display.across(side).max - 1 : display.across(side).min }
+
+    /// The phone's size along the shared edge, and away from it.
+    public var phoneLength: Double { phone.along(side).max - phone.along(side).min }
+    public var phoneDepth: Double { phone.across(side).max - phone.across(side).min }
+    /// The display's size away from the shared edge.
+    public var displayDepth: Double { display.across(side).max - display.across(side).min }
 
     public init?(layout: PhoneLayout, displays: [Display]) {
         let layout = layout.sanitized()
         guard let target = displays.first(where: { $0.id == layout.displayID }), target.frame.isValid else {
             return nil
         }
-        let display = target.frame
+        let display = target.frame, side = layout.side
         let (width, height) = layout.phoneSize
-        // Keep at least a quarter of the phone (or the whole display) overlapping the edge.
-        let centre = display.minY + layout.verticalPosition * display.height
-        var top = centre - height / 2
-        let overlap = min(height, display.height) / 4
-        top = min(max(top, display.minY - height + overlap), display.maxY - overlap)
-        let phoneX = layout.side == .right ? display.maxX : display.minX - width
-        let phone = Rect(x: phoneX, y: top, width: width, height: height)
+        let length = side.isHorizontal ? width : height, depth = side.isHorizontal ? height : width
+        let edge = display.along(side), bounds = display.across(side)
+        // Keep at least a quarter of the phone (or the whole edge) overlapping the edge.
+        let centre = edge.min + layout.edgePosition * (edge.max - edge.min)
+        let overlap = min(length, edge.max - edge.min) / 4
+        let start = min(max(centre - length / 2, edge.min - length + overlap), edge.max - overlap)
+        let origin = Point(along: start, across: side.outward > 0 ? bounds.max : bounds.min - depth, side: side)
+        let phone = Rect(x: origin.x, y: origin.y, width: width, height: height)
 
-        let low = max(display.minY, phone.minY), high = min(display.maxY, phone.maxY)
+        let low = max(edge.min, start), high = min(edge.max, start + length)
         guard high - low >= 1 else { return nil }
         // Remove the parts of the edge where another display continues the desktop.
-        let probeX = layout.side == .right ? display.maxX + 0.5 : display.minX - 0.5
+        let probe = side.outward > 0 ? bounds.max + 0.5 : bounds.min - 0.5
         let neighbours = displays.filter {
-            $0.id != target.id && $0.frame.isValid && probeX >= $0.frame.minX && probeX < $0.frame.maxX
+            $0.id != target.id && $0.frame.isValid && probe >= $0.frame.across(side).min && probe < $0.frame.across(side).max
         }
-        let spans = Self.uncovered(low...high, by: neighbours)
+        let spans = Self.uncovered(low...high, by: neighbours, side: side)
         guard !spans.isEmpty else { return nil }
-        let reachLow = min(low, max(display.minY + Self.cornerGuard, phone.minY - Self.snapMargin))
-        let reachHigh = max(high, min(display.maxY - Self.cornerGuard, phone.maxY + Self.snapMargin))
+        let reachLow = min(low, max(edge.min + Self.cornerGuard, start - Self.snapMargin))
+        let reachHigh = max(high, min(edge.max - Self.cornerGuard, start + length + Self.snapMargin))
         self.display = display
         self.phone = phone
-        self.side = layout.side
+        self.side = side
         self.openSpans = spans
         // Margins only extend the shared edge; they never stand alone beyond another display.
-        self.crossingSpans = Self.uncovered(reachLow...reachHigh, by: neighbours)
+        self.crossingSpans = Self.uncovered(reachLow...reachHigh, by: neighbours, side: side)
             .filter { reach in spans.contains { $0.overlaps(reach) } }
     }
 
-    private static func uncovered(_ range: ClosedRange<Double>, by displays: [Display]) -> [ClosedRange<Double>] {
+    private static func uncovered(_ range: ClosedRange<Double>, by displays: [Display], side: Side) -> [ClosedRange<Double>] {
         var spans = [range]
-        for f in displays.map(\.frame) {
+        for f in displays.map({ $0.frame.along(side) }) {
             spans = spans.flatMap { span -> [ClosedRange<Double>] in
-                if f.maxY <= span.lowerBound || f.minY >= span.upperBound { return [span] }
+                if f.max <= span.lowerBound || f.min >= span.upperBound { return [span] }
                 var pieces: [ClosedRange<Double>] = []
-                if f.minY > span.lowerBound { pieces.append(span.lowerBound...f.minY) }
-                if f.maxY < span.upperBound { pieces.append(f.maxY...span.upperBound) }
+                if f.min > span.lowerBound { pieces.append(span.lowerBound...f.min) }
+                if f.max < span.upperBound { pieces.append(f.max...span.upperBound) }
                 return pieces
             }
         }
@@ -188,45 +228,50 @@ public struct ScreenLink: Equatable, Sendable {
     }
 
     /// The arrangement a dragged phone snaps to: the exposed display edge nearest to
-    /// where its centre was dropped (global coordinates), at that height. Edges a
+    /// where its centre was dropped (global coordinates), at that position. Edges a
     /// neighbouring display covers are never offered. Nil if no edge is usable.
     public static func snappedLayout(centre: Point, base: PhoneLayout, displays: [Display]) -> PhoneLayout? {
         var best: (layout: PhoneLayout, distance: Double)?
         for display in displays where display.frame.isValid {
-            let frame = display.frame
             for side in Side.allCases {
+                let edge = display.frame.along(side), bounds = display.frame.across(side)
                 var layout = base
                 layout.displayID = display.id
                 layout.side = side
-                layout.verticalPosition = min(1, max(0, (centre.y - frame.minY) / frame.height))
+                layout.edgePosition = min(1, max(0, (centre.along(side) - edge.min) / (edge.max - edge.min)))
                 guard let link = ScreenLink(layout: layout, displays: displays) else { continue }
-                let edgeX = side == .right ? frame.maxX + link.phone.width / 2 : frame.minX - link.phone.width / 2
-                let beyond = max(0, abs(centre.y - frame.midY) - frame.height / 2)
-                let distance = ((centre.x - edgeX) * (centre.x - edgeX) + beyond * beyond).squareRoot()
+                // Distance from where the phone's centre would sit on this edge.
+                let home = side.outward > 0 ? bounds.max + link.phoneDepth / 2 : bounds.min - link.phoneDepth / 2
+                let off = centre.across(side) - home
+                let beyond = max(0, abs(centre.along(side) - (edge.min + edge.max) / 2) - (edge.max - edge.min) / 2)
+                let distance = (off * off + beyond * beyond).squareRoot()
                 if best == nil || distance < best!.distance { best = (layout, distance) }
             }
         }
         return best?.layout
     }
 
-    /// True where pushing against the edge at Mac height `y` crosses onto the phone.
-    public func isOpen(atY y: Double) -> Bool {
-        crossingSpans.contains { y >= $0.lowerBound && y < $0.upperBound }
+    /// True where pushing against the edge at `position` along it crosses onto the phone.
+    public func isOpen(along position: Double) -> Bool {
+        crossingSpans.contains { position >= $0.lowerBound && position < $0.upperBound }
     }
 
-    /// Mac location where the cursor reappears when leaving the phone at phone-local y.
-    public func returnPoint(phoneY: Double) -> Point {
-        let y = phone.minY + phoneY
+    /// Mac location where the cursor reappears when leaving the phone at phone-local
+    /// position `phoneAlong` along the shared edge.
+    public func returnPoint(phoneAlong: Double) -> Point {
+        let position = phone.along(side).min + phoneAlong
         // Snap into the nearest open span so the cursor lands on the shared edge.
-        let clampedY = openSpans
-            .map { min(max(y, $0.lowerBound), $0.upperBound - 1) }
-            .min(by: { abs($0 - y) < abs($1 - y) }) ?? display.midY
-        return Point(x: edgeColumn, y: clampedY)
+        let clamped = openSpans
+            .map { min(max(position, $0.lowerBound), $0.upperBound - 1) }
+            .min(by: { abs($0 - position) < abs($1 - position) })
+            ?? (display.along(side).min + display.along(side).max) / 2
+        return Point(along: clamped, across: edgeLine, side: side)
     }
 
-    /// Phone-local position for a cursor that crossed the edge at Mac y.
-    public func entryPoint(macY: Double, inset: Double) -> Point {
-        let x = side == .right ? inset : phone.width - inset
-        return Point(x: x, y: min(max(macY - phone.minY, 0), phone.height - 1))
+    /// Phone-local position for a cursor that crossed the edge at Mac position
+    /// `macAlong`, `inset` points in from the phone's edge facing the Mac.
+    public func entryPoint(macAlong: Double, inset: Double) -> Point {
+        let along = min(max(macAlong - phone.along(side).min, 0), phoneLength - 1)
+        return Point(along: along, across: side.outward > 0 ? inset : phoneDepth - inset, side: side)
     }
 }

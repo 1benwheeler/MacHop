@@ -174,6 +174,7 @@ struct SettingsTests {
         #expect(settings.session.scroll.style == .drag)
         #expect(settings.session.layout.size == 620)
         #expect(settings.gestureSetup == nil)
+        #expect(settings.session.layout.edgePosition == 0.37, "the position saved as verticalPosition")
     }
 
     @Test("The setup guide remembers the gestures step, finished or skipped")

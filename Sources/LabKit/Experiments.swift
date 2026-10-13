@@ -432,23 +432,23 @@ public final class Lab {
         for trip in 1...count {
             if trip % 5 == 1 { try requireExpectedScreen() }
             let status = try app.status()
-            guard let edge = status["edge"] as? [String: Any], let edgeX = edge["x"] as? Double,
-                  let top = edge["top"] as? Double, let bottom = edge["bottom"] as? Double else {
+            guard let edge = LabEdge(status: status) else {
                 throw AutomationClient.ClientError.failed("MacHop has no usable screen edge; check the arrangement.")
             }
-            let outward: Double = (edge["side"] as? String) == "left" ? -1 : 1
-            let y = top + (bottom - top) * (0.3 + 0.4 * Double(trip % 3) / 2)
+            let at = edge.point(along: edge.start + (edge.end - edge.start) * (0.3 + 0.4 * Double(trip % 3) / 2), inside: 0)
             if (status["owner"] as? String) == "phone" { try app.send(["cmd": "return"]) }
             pause(0.3)
             let reference = screen.frame()
-            // Push through the edge.
-            for _ in 0..<12 {
-                try app.send(["cmd": "move", "x": edgeX, "y": y, "dx": 2 * outward, "dy": 0])
+            // Push through the edge (the top edge needs a firmer push, past the menu bar).
+            let push = edge.delta(outward: 2)
+            for _ in 0..<(edge.horizontal ? 20 : 12) {
+                try app.send(["cmd": "move", "x": at.x, "y": at.y, "dx": push.dx, "dy": push.dy])
                 pause(0.008)
             }
             let entered = (try app.status()["owner"] as? String) == "phone"
             // Move into the phone and look for the pointer.
-            for _ in 0..<20 { try app.send(["cmd": "move", "dx": 5 * outward, "dy": 2]); pause(0.008) }
+            let deeper = edge.delta(outward: 5, sideways: 2)
+            for _ in 0..<20 { try app.send(["cmd": "move", "dx": deeper.dx, "dy": deeper.dy]); pause(0.008) }
             let moved = settledFrame(after: 0.4)
             let pointerSeen: Bool? = {
                 guard let reference, let moved else { return nil }
@@ -468,7 +468,8 @@ public final class Lab {
             // Back across the edge.
             var returned = false
             for _ in 0..<200 {
-                try app.send(["cmd": "move", "dx": -6 * outward, "dy": 0])
+                let back = edge.delta(outward: -6)
+                try app.send(["cmd": "move", "dx": back.dx, "dy": back.dy])
                 if (try app.status()["owner"] as? String) == "mac" { returned = true; break }
                 pause(0.004)
             }

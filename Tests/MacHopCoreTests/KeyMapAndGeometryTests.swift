@@ -46,9 +46,9 @@ struct KeyMapTests {
 struct GeometryTests {
     let main = Display(id: 1, frame: Rect(x: 0, y: 0, width: 1512, height: 982))
 
-    @Test("The phone sits beside the chosen edge, centred by default")
+    @Test("The phone sits beside the chosen side edge, centred by default")
     func phonePlacement() throws {
-        for side in Side.allCases {
+        for side in [Side.left, .right] {
             let link = try #require(ScreenLink(layout: PhoneLayout(displayID: 1, side: side), displays: [main]))
             #expect(link.phone.height == 620)
             #expect(abs(link.phone.width - 620 * 393 / 852) < 0.001)
@@ -60,7 +60,7 @@ struct GeometryTests {
 
     @Test("Extreme positions keep part of the phone on the edge", arguments: [0.0, 1.0])
     func extremePositions(position: Double) throws {
-        let layout = PhoneLayout(displayID: 1, verticalPosition: position, size: 1600)
+        let layout = PhoneLayout(displayID: 1, edgePosition: position, size: 1600)
         let link = try #require(ScreenLink(layout: layout, displays: [main]))
         #expect(link.openSpans.reduce(0) { $0 + $1.upperBound - $1.lowerBound } >= 200)
     }
@@ -68,20 +68,20 @@ struct GeometryTests {
     @Test("A push just past either end of the phone still crosses, but never by the menu bar or a corner")
     func crossingMargins() throws {
         // Ben's arrangement: the phone spans about 53…673 of a 982-point-high edge.
-        let link = try #require(ScreenLink(layout: PhoneLayout(displayID: 1, verticalPosition: 0.37), displays: [main]))
+        let link = try #require(ScreenLink(layout: PhoneLayout(displayID: 1, edgePosition: 0.37), displays: [main]))
         #expect(link.openSpans == [link.phone.minY...link.phone.maxY])
-        #expect(link.isOpen(atY: link.phone.maxY + 5), "the wall Ben hit, 5 points below the phone")
-        #expect(link.isOpen(atY: link.phone.maxY + ScreenLink.snapMargin - 1))
-        #expect(!link.isOpen(atY: link.phone.maxY + ScreenLink.snapMargin + 1))
-        #expect(link.isOpen(atY: ScreenLink.cornerGuard + 1))
-        #expect(!link.isOpen(atY: ScreenLink.cornerGuard - 1), "menu bar")
+        #expect(link.isOpen(along: link.phone.maxY + 5), "the wall Ben hit, 5 points below the phone")
+        #expect(link.isOpen(along: link.phone.maxY + ScreenLink.snapMargin - 1))
+        #expect(!link.isOpen(along: link.phone.maxY + ScreenLink.snapMargin + 1))
+        #expect(link.isOpen(along: ScreenLink.cornerGuard + 1))
+        #expect(!link.isOpen(along: ScreenLink.cornerGuard - 1), "menu bar")
         // Entering through a margin lands on the phone's nearest edge.
-        #expect(link.entryPoint(macY: link.phone.maxY + 30, inset: 2).y == link.phone.height - 1)
-        #expect(link.entryPoint(macY: link.phone.minY - 10, inset: 2).y == 0)
+        #expect(link.entryPoint(macAlong: link.phone.maxY + 30, inset: 2).y == link.phone.height - 1)
+        #expect(link.entryPoint(macAlong: link.phone.minY - 10, inset: 2).y == 0)
         // A phone near the bottom gets no margin into the bottom corner.
-        let low = try #require(ScreenLink(layout: PhoneLayout(displayID: 1, verticalPosition: 0.6), displays: [main]))
+        let low = try #require(ScreenLink(layout: PhoneLayout(displayID: 1, edgePosition: 0.6), displays: [main]))
         #expect(low.phone.maxY < main.frame.maxY && low.phone.maxY + ScreenLink.snapMargin > main.frame.maxY - ScreenLink.cornerGuard)
-        #expect(!low.isOpen(atY: main.frame.maxY - ScreenLink.cornerGuard + 1))
+        #expect(!low.isOpen(along: main.frame.maxY - ScreenLink.cornerGuard + 1))
     }
 
     @Test("iPhone models give the real screen shape and a proportional size")
@@ -104,16 +104,17 @@ struct GeometryTests {
         // Dropped right of the display, a third of the way down.
         let right = try #require(ScreenLink.snappedLayout(centre: Point(x: 1700, y: 327), base: base, displays: [main]))
         #expect(right.side == .right && right.displayID == 1)
-        #expect(abs(right.verticalPosition - 327.0 / 982) < 0.001)
+        #expect(abs(right.edgePosition - 327.0 / 982) < 0.001)
         // Dropped over the left half: the left edge.
         let left = try #require(ScreenLink.snappedLayout(centre: Point(x: 200, y: 900), base: base, displays: [main]))
-        #expect(left.side == .left && abs(left.verticalPosition - 900.0 / 982) < 0.001)
-        // Far above the display: clamped to the top, size and orientation kept.
+        #expect(left.side == .left && abs(left.edgePosition - 900.0 / 982) < 0.001)
+        // Far above the display, past its right end: the right end of the top edge,
+        // size and orientation kept.
         var big = base
         big.size = 900
         big.orientation = .landscape
         let high = try #require(ScreenLink.snappedLayout(centre: Point(x: 1600, y: -800), base: big, displays: [main]))
-        #expect(high.verticalPosition == 0 && high.size == 900 && high.orientation == .landscape)
+        #expect(high.side == .top && high.edgePosition == 1 && high.size == 900 && high.orientation == .landscape)
         // Two displays side by side: the shared edge is covered, so dropping between
         // them picks an outer edge; dropping right of the second picks that display.
         let second = Display(id: 2, frame: Rect(x: 1512, y: 0, width: 1920, height: 1080))
@@ -127,14 +128,14 @@ struct GeometryTests {
     func adjacentDisplay() throws {
         let side = Display(id: 2, frame: Rect(x: 1512, y: 300, width: 1000, height: 300))
         let link = try #require(ScreenLink(layout: PhoneLayout(displayID: 1, size: 900), displays: [main, side]))
-        #expect(!link.isOpen(atY: 450))
-        #expect(link.isOpen(atY: 200))
-        #expect(link.isOpen(atY: 700))
+        #expect(!link.isOpen(along: 450))
+        #expect(link.isOpen(along: 200))
+        #expect(link.isOpen(along: 700))
         // The margins never reach past a neighbouring display.
         let below = Display(id: 4, frame: Rect(x: 1512, y: 802, width: 800, height: 600))
         let blocked = try #require(ScreenLink(layout: PhoneLayout(displayID: 1), displays: [main, below]))
-        #expect(!blocked.isOpen(atY: 820))
-        #expect(blocked.isOpen(atY: 120), "the free end keeps its margin")
+        #expect(!blocked.isOpen(along: 820))
+        #expect(blocked.isOpen(along: 120), "the free end keeps its margin")
         // A display covering the whole edge leaves nowhere to cross.
         let wall = Display(id: 3, frame: Rect(x: 1512, y: -500, width: 1000, height: 2000))
         #expect(ScreenLink(layout: PhoneLayout(displayID: 1), displays: [main, wall]) == nil)
@@ -143,21 +144,21 @@ struct GeometryTests {
     @Test("Entry, return and parking points stay where they should")
     func points() throws {
         let link = try #require(ScreenLink(layout: PhoneLayout(displayID: 1, side: .right), displays: [main]))
-        let entry = link.entryPoint(macY: 500, inset: 2)
+        let entry = link.entryPoint(macAlong: 500, inset: 2)
         #expect(entry.x == 2)
         #expect(abs(entry.y - (500 - link.phone.minY)) < 0.001)
-        let back = link.returnPoint(phoneY: entry.y)
+        let back = link.returnPoint(phoneAlong: entry.y)
         #expect(back == Point(x: main.frame.maxX - 1, y: 500))
         // Leaving from beyond the display's vertical extent snaps onto the open edge.
-        let low = link.returnPoint(phoneY: link.phone.height + 500)
+        let low = link.returnPoint(phoneAlong: link.phone.height + 500)
         #expect(low.y <= main.frame.maxY - 1 && low.y >= main.frame.minY)
     }
 
     @Test("Missing display or invalid settings are handled")
     func invalid() {
         #expect(ScreenLink(layout: PhoneLayout(displayID: 99), displays: [main]) == nil)
-        let wild = PhoneLayout(displayID: 1, verticalPosition: .nan, size: .infinity, aspectRatio: .nan).sanitized()
-        #expect(wild.verticalPosition == 0.5)
+        let wild = PhoneLayout(displayID: 1, edgePosition: .nan, size: .infinity, aspectRatio: .nan).sanitized()
+        #expect(wild.edgePosition == 0.5)
         #expect(wild.size == 620)
         #expect(wild.aspectRatio == PhoneLayout.defaultAspectRatio)
         #expect(PhoneLayout(displayID: 1, size: 10, aspectRatio: -3).sanitized().aspectRatio == 0.3)
@@ -212,5 +213,46 @@ struct ScrollConverterTests {
         var converter = ScrollConverter()
         #expect(converter.convert(ScrollInput(dy: .infinity, continuous: true), settings: ScrollSettings()).isZero)
         #expect(converter.convert(ScrollInput(dy: 1e12, continuous: true), settings: ScrollSettings()).isZero)
+    }
+
+    // MARK: Top edge
+
+    @Test("An iPhone above the screen shares the top edge, with the same margins as the sides")
+    func topEdge() throws {
+        let main = Display(id: 1, frame: Rect(x: 0, y: 0, width: 1512, height: 982))
+        let layout = PhoneLayout(displayID: 1, side: .top, edgePosition: 0.25, orientation: .landscape)
+        let link = try #require(ScreenLink(layout: layout, displays: [main]))
+        #expect(link.phone.maxY == 0 && abs(link.phone.midX - 378) < 0.5)
+        #expect(link.edgeLine == 0)
+        #expect(link.openSpans == [link.phone.minX...link.phone.maxX])
+        #expect(link.isOpen(along: link.phone.maxX + ScreenLink.snapMargin - 1))
+        #expect(!link.isOpen(along: ScreenLink.cornerGuard - 1), "the Apple menu corner")
+        #expect(link.returnPoint(phoneAlong: 100) == Point(x: link.phone.minX + 100, y: 0))
+        #expect(link.entryPoint(macAlong: 400, inset: 2) == Point(x: 400 - link.phone.minX, y: link.phone.height - 2))
+    }
+
+    @Test("A display above covers the top edge; the iPhone only gets what's left")
+    func topEdgeUnderAnotherDisplay() throws {
+        let main = Display(id: 1, frame: Rect(x: 0, y: 0, width: 1512, height: 982))
+        let above = Display(id: 2, frame: Rect(x: -200, y: -1080, width: 1920, height: 1080))
+        #expect(ScreenLink(layout: PhoneLayout(displayID: 1, side: .top), displays: [main, above]) == nil)
+        let partly = Display(id: 2, frame: Rect(x: 800, y: -1080, width: 1920, height: 1080))
+        let link = try #require(ScreenLink(layout: PhoneLayout(displayID: 1, side: .top, edgePosition: 0.4, orientation: .landscape),
+                                           displays: [main, partly]))
+        #expect(link.openSpans.allSatisfy { $0.upperBound <= 800 })
+        // Dragged above the covered part, it snaps to a free edge instead.
+        let base = PhoneLayout(displayID: 1, side: .top, orientation: .landscape)
+        let snapped = try #require(ScreenLink.snappedLayout(centre: Point(x: 1200, y: -150), base: base, displays: [main, partly]))
+        #expect(!(snapped.displayID == 1 && snapped.side == .top))
+    }
+
+    @Test("Dropping the iPhone above a display puts it on the top edge, at that place")
+    func snapToTop() throws {
+        let main = Display(id: 1, frame: Rect(x: 0, y: 0, width: 1512, height: 982))
+        let base = PhoneLayout(displayID: 1, orientation: .landscape)
+        let top = try #require(ScreenLink.snappedLayout(centre: Point(x: 900, y: -150), base: base, displays: [main]))
+        #expect(top.side == .top && abs(top.edgePosition - 900.0 / 1512) < 0.001)
+        let side = try #require(ScreenLink.snappedLayout(centre: Point(x: 1700, y: 300), base: base, displays: [main]))
+        #expect(side.side == .right)
     }
 }

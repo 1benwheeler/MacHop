@@ -259,14 +259,15 @@ public final class InputSession {
         // Release any button where it is, and leave the pointer there: iOS fades it
         // after about 15 s without movement (nothing a Bluetooth pointer sends hides it sooner).
         if let pointer = phonePointer { link.send(.pointer(pointerReport(at: pointer))) }
-        var destination = point ?? phonePointer.flatMap { screenLink?.returnPoint(phoneY: $0.y) }
+        var destination = point ?? phonePointer.flatMap { pointer in
+            screenLink.map { $0.returnPoint(phoneAlong: pointer.along($0.side)) }
+        }
         // A return the user didn't make by pushing through the edge (⌃⌥⌘⎋, Bluetooth
         // dropping, …) lands a little inside the screen and holds off re-entry for
         // longer, so a hand still moving towards the phone can't carry input straight back.
         let deliberateExit = reason != .edge
-        if deliberateExit, point == nil, let link = screenLink, var landing = destination {
-            landing.x -= Self.exitInset * link.side.outward
-            destination = landing
+        if deliberateExit, point == nil, let link = screenLink, let landing = destination {
+            destination = landing.offset(outward: -Self.exitInset, through: link.side)
         }
         phonePointer = nil
         crossingPressure = 0
@@ -280,12 +281,13 @@ public final class InputSession {
         onOwnerChange?(.mac, reason)
     }
 
-    /// Hands input to the phone as if the pointer had crossed at Mac height `macY`.
-    /// `carry` is hand movement past the crossing point (Mac points, inward), applied on
-    /// the phone so a fast flick keeps going instead of stopping at the edge.
+    /// Hands input to the phone as if the pointer had crossed at Mac position `position`
+    /// along the shared edge (a y beside the screen, an x above it). `carry` is hand
+    /// movement past the crossing point (Mac points, inward), applied on the phone so a
+    /// fast flick keeps going instead of stopping at the edge.
     /// Used by edge crossing and by automation.
     @discardableResult
-    public func enterPhone(atMacY macY: Double, carry: Double = 0) -> Bool {
+    public func enterPhone(atEdge position: Double, carry: Double = 0) -> Bool {
         guard owner == .mac, isEnabled, link.isReady, let screenLink else { return false }
         if let refusal = entryGuard?() {
             crossingPressure = 0
@@ -294,17 +296,18 @@ public final class InputSession {
             return false
         }
         owner = .phone
-        let inset = min(2, screenLink.phone.width / 4)
-        var entry = screenLink.entryPoint(macY: macY, inset: inset)
-        let inward = min(max(0, carry) * pointerScale, screenLink.phone.width / 2)
-        entry.x += screenLink.side == .right ? inward : -inward
+        let side = screenLink.side
+        let inset = min(2, screenLink.phoneDepth / 4)
+        // Moving deeper into the phone is outward through the Mac's edge.
+        let inward = min(max(0, carry) * pointerScale, screenLink.phoneDepth / 2)
+        let entry = screenLink.entryPoint(macAlong: position, inset: inset).offset(outward: inward, through: side)
         phonePointer = entry
         crossingPressure = 0
         returnPressure = 0
         scroll.reset()
         phoneButtons = 0
         cursor.hide()
-        recentre(from: Point(x: screenLink.edgeColumn, y: macY), within: screenLink.display)
+        recentre(from: Point(along: position, across: screenLink.edgeLine, side: side), within: screenLink.display)
         link.send(.pointer(pointerReport(at: entry)))
         onOwnerChange?(.phone, nil)
         return true
@@ -316,8 +319,8 @@ public final class InputSession {
         lastLocation = location
         switch owner {
         case .mac:
-            if let carry = crossing(location: location, delta: delta) {
-                return enterPhone(atMacY: location.y, carry: carry) ? .suppress : .pass
+            if let carry = crossing(location: location, delta: delta), let side = screenLink?.side {
+                return enterPhone(atEdge: location.along(side), carry: carry) ? .suppress : .pass
             }
             return .pass
         case .phone:
@@ -388,53 +391,60 @@ public final class InputSession {
             crossingPressure = 0
             return nil
         }
+        let side = screenLink.side, line = screenLink.edgeLine
+        let push = delta.across(side) * side.outward
         // Only motion that would have carried the cursor past the edge counts as a
         // push, so a fast move that merely lands on the edge does not cross.
-        let beyond = (previous.x + delta.x - screenLink.edgeColumn) * screenLink.side.outward
-        let outward = min(delta.x * screenLink.side.outward, max(0, beyond))
-        let atEdge = screenLink.side == .right
-            ? location.x >= screenLink.edgeColumn - 0.5 && location.x < screenLink.display.maxX + 0.5
-            : location.x <= screenLink.edgeColumn + 0.5 && location.x > screenLink.display.minX - 1.5
-        guard atEdge, screenLink.isOpen(atY: location.y),
-              location.y >= screenLink.display.minY, location.y < screenLink.display.maxY else {
+        let beyond = (previous.across(side) + delta.across(side) - line) * side.outward
+        var outward = min(push, max(0, beyond))
+        let across = location.across(side), bounds = screenLink.display.across(side)
+        let atEdge = side.outward > 0
+            ? across >= line - 0.5 && across < bounds.max + 0.5
+            : across <= line + 0.5 && across > bounds.min - 1.5
+        let along = location.along(side), edge = screenLink.display.along(side)
+        guard atEdge, screenLink.isOpen(along: along), along >= edge.min, along < edge.max else {
             crossingPressure = 0
             return nil
         }
-        if delta.x * screenLink.side.outward < 0 { crossingPressure = 0 }
-        guard outward > 0, !Self.slidesAlongEdge(delta) else { return nil }
+        if push < 0 { crossingPressure = 0 }
+        // The menu bar is a target people fling the pointer at, so at the top edge the
+        // movement that arrives there doesn't count: only pushing on once there does.
+        if side == .top, abs(previous.across(side) - line) > 0.5 { outward = 0 }
+        guard outward > 0, !Self.slidesAlongEdge(delta, side: side) else { return nil }
         crossingPressure += outward
-        let needed = max(0.5, settings.edgeResistance)
+        let needed = max(0.5, settings.edgeResistance, side == .top ? Self.menuBarResistance : 0)
         return crossingPressure >= needed ? crossingPressure - needed : nil
     }
 
-    /// Motion that is mostly up or down slides along an edge instead of pushing
-    /// through it, so drifting sideways while moving vertically never crosses.
-    static func slidesAlongEdge(_ delta: Point) -> Bool {
-        abs(delta.y) > 2 * abs(delta.x)
+    /// The least push that crosses the top edge, whatever the resistance setting:
+    /// the menu bar is there, and reaching for it shouldn't land on the iPhone.
+    public static let menuBarResistance = 18.0
+
+    /// Motion that is mostly along an edge slides along it instead of pushing
+    /// through it, so drifting outward while moving along the edge never crosses.
+    static func slidesAlongEdge(_ delta: Point, side: Side) -> Bool {
+        abs(delta.along(side)) > 2 * abs(delta.across(side))
     }
 
     private func movePhonePointer(by macDelta: Point) {
         guard let screenLink, var pointer = phonePointer else { return }
-        let scale = pointerScale
+        let side = screenLink.side, scale = pointerScale
         let delta = Point(x: macDelta.x * scale, y: macDelta.y * scale)
-        let width = screenLink.phone.width, height = screenLink.phone.height
-        let rawX = pointer.x + delta.x
-        pointer.y = min(max(pointer.y + delta.y, 0), height)
+        let raw = Point(x: pointer.x + delta.x, y: pointer.y + delta.y)
+        pointer = Point(x: min(max(raw.x, 0), screenLink.phone.width), y: min(max(raw.y, 0), screenLink.phone.height))
         // Overshoot past the edge that faces the Mac builds return pressure.
-        let towardMac = -delta.x * screenLink.side.outward
-        let overshoot = screenLink.side == .right ? max(0, -rawX) : max(0, rawX - width)
+        let towardMac = -delta.across(side) * side.outward
+        let overshoot = side.outward > 0 ? max(0, -raw.across(side)) : max(0, raw.across(side) - screenLink.phoneDepth)
         if towardMac < 0 { returnPressure = 0 }
         // Pressure is counted in hand movement (Mac points), so resistance feels the same at any speed.
-        if overshoot > 0, !Self.slidesAlongEdge(delta) { returnPressure += overshoot / max(scale, 0.01) }
-        pointer.x = min(max(rawX, 0), width)
+        if overshoot > 0, !Self.slidesAlongEdge(delta, side: side) { returnPressure += overshoot / max(scale, 0.01) }
         phonePointer = pointer
         let holdingButton = buttonHolders.values.contains(.phone)
         let needed = max(0.5, settings.edgeResistance)
         if overshoot > 0, !holdingButton, returnPressure >= needed {
             // Carry the movement past the resistance onto the Mac, as on the way in.
-            var destination = screenLink.returnPoint(phoneY: pointer.y)
-            let inward = min(returnPressure - needed, screenLink.display.width / 4)
-            destination.x -= inward * screenLink.side.outward
+            let inward = min(returnPressure - needed, screenLink.displayDepth / 4)
+            let destination = screenLink.returnPoint(phoneAlong: pointer.along(side)).offset(outward: -inward, through: side)
             returnToMac(.edge, cursorAt: destination)
             return
         }

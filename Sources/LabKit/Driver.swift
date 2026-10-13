@@ -20,10 +20,9 @@ public final class Driver {
     public func status() throws -> [String: Any] { try app.status() }
     public var owner: String { ((try? status())?["owner"] as? String) ?? "?" }
 
-    func edge() throws -> (x: Double, top: Double, bottom: Double, outward: Double) {
-        guard let edge = try status()["edge"] as? [String: Any], let x = edge["x"] as? Double,
-              let top = edge["top"] as? Double, let bottom = edge["bottom"] as? Double else { throw DriverError.noEdge }
-        return (x, top, bottom, (edge["side"] as? String) == "left" ? -1 : 1)
+    func edge() throws -> LabEdge {
+        guard let edge = LabEdge(status: try status()) else { throw DriverError.noEdge }
+        return edge
     }
 
     /// Phone pointer as fractions of the phone screen, and the phone size in Mac points.
@@ -44,11 +43,12 @@ public final class Driver {
     public func cross(fraction: Double = 0.5) throws -> Bool {
         if owner == "phone" { return true }
         let edge = try edge()
-        let y = edge.top + (edge.bottom - edge.top) * fraction
-        try app.send(["cmd": "post.moveTo", "x": edge.x - 60 * edge.outward, "y": y])
+        let start = edge.point(along: edge.start + (edge.end - edge.start) * fraction, inside: 60)
+        try app.send(["cmd": "post.moveTo", "x": start.x, "y": start.y])
         Thread.sleep(forTimeInterval: 0.3)
+        let push = edge.delta(outward: 20)
         for _ in 0..<8 {
-            try move(dx: 20 * edge.outward, dy: 0, step: 4)
+            try move(dx: push.dx, dy: push.dy, step: 4)
             if owner == "phone" { return true }
         }
         return owner == "phone"
@@ -56,10 +56,10 @@ public final class Driver {
 
     /// Move back through the phone's edge facing the Mac.
     public func back() throws -> Bool {
-        let outward = try edge().outward
+        let inward = try edge().delta(outward: -40)
         for _ in 0..<40 {
             if owner == "mac" { return true }
-            try move(dx: -40 * outward, dy: 0)
+            try move(dx: inward.dx, dy: inward.dy)
         }
         return owner == "mac"
     }
@@ -101,5 +101,34 @@ public final class Driver {
     public func scroll(dy: Double, dx: Double = 0) throws {
         guard owner == "phone" else { throw DriverError.notOnPhone }
         try app.send(["cmd": "post.scroll", "dy": dy, "dx": dx, "steps": 12])
+    }
+}
+
+/// The screen edge MacHop shares with the iPhone, as its automation status reports it.
+struct LabEdge {
+    /// Across the edge: an x beside the screen, a y above it.
+    let line: Double
+    /// Along the edge: the open part's two ends.
+    let start: Double, end: Double
+    let side: String
+
+    init?(status: [String: Any]) {
+        guard let edge = status["edge"] as? [String: Any], let line = edge["line"] as? Double,
+              let start = edge["start"] as? Double, let end = edge["end"] as? Double, let side = edge["side"] as? String else { return nil }
+        (self.line, self.start, self.end, self.side) = (line, start, end, side)
+    }
+
+    var outward: Double { side == "right" ? 1 : -1 }
+    var horizontal: Bool { side == "top" }
+
+    /// The Mac point `along` the edge, `inside` points in from it.
+    func point(along: Double, inside: Double) -> (x: Double, y: Double) {
+        let across = line - inside * outward
+        return horizontal ? (along, across) : (across, along)
+    }
+
+    /// A movement of `distance` outward through the edge (negative moves inward), plus `sideways` along it.
+    func delta(outward distance: Double, sideways: Double = 0) -> (dx: Double, dy: Double) {
+        horizontal ? (sideways, distance * outward) : (distance * outward, sideways)
     }
 }

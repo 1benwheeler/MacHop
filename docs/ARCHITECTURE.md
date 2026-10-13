@@ -28,8 +28,9 @@ macOS input ──► EventTap ──► InputSession ──► HIDTransport ─
 - **Forgiving ends:** a push just past either end of the iPhone's part of the edge still crosses, landing at the iPhone's nearest corner.
 - **Sliding isn't pushing:** mostly up-and-down movement along an edge never crosses, so a slight sideways drift can't bounce you between devices.
 - **Momentum:** movement past the resistance carries over, so a fast flick keeps going on the other side.
+- **The menu bar:** at the top edge, movement that arrives at the edge doesn't count, and it always takes at least a medium push, so flinging the pointer at the menu bar stays on the Mac.
 
-The iPhone's pointer is driven to absolute positions on a virtual iPhone placed beside your display, so returning to the Mac lands at the matching height, unaffected by iOS's pointer acceleration.
+The iPhone's pointer is driven to absolute positions on a virtual iPhone placed beside or above your display, so returning to the Mac lands at the matching place, unaffected by iOS's pointer acceleration.
 
 ## The hidden Mac cursor
 

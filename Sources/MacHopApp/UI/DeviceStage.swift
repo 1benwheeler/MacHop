@@ -2,9 +2,9 @@
 import SwiftUI
 import MacHopCore
 
-/// A drawing of the Mac's displays with the iPhone beside the chosen one, as
+/// A drawing of the Mac's displays with the iPhone beside or above the chosen one, as
 /// MacHop arranges them. With `onArrange`, the iPhone can be dragged to any exposed
-/// display edge, like the display arrangement in System Settings.
+/// side or top edge, like the display arrangement in System Settings.
 struct DeviceStage: View {
     enum Status: Equatable { case offline, ready, controlling }
 
@@ -46,7 +46,8 @@ struct DeviceStage: View {
 
     /// The phone as drawn: a few points clear of the Mac, like real devices side by side.
     private func placedPhone(_ link: ScreenLink, map: StageMap) -> CGRect {
-        map.view(link.phone).offsetBy(dx: link.side == .right ? Self.gap : -Self.gap, dy: 0)
+        let gap = Point.zero.offset(outward: Self.gap, through: link.side)
+        return map.view(link.phone).offsetBy(dx: gap.x, dy: gap.y)
     }
 
     private static let gap = 7.0
@@ -86,14 +87,16 @@ struct DeviceStage: View {
             drawDisplay(map.view(display.frame), chosen: display.id == shown.displayID,
                         builtIn: CGDisplayIsBuiltin(display.id) != 0, in: &context)
         }
-        // The shared edge.
-        let x = link.side == .right ? link.display.maxX : link.display.minX
+        // The shared edge, halfway across the gap.
+        let line = link.side.outward > 0 ? link.display.across(link.side).max : link.display.across(link.side).min
         for span in link.openSpans {
-            let r = map.view(MacHopCore.Rect(x: x, y: span.lowerBound, width: 0, height: span.upperBound - span.lowerBound))
-                .offsetBy(dx: (link.side == .right ? 1 : -1) * Self.gap / 2, dy: 0)
+            let from = map.point(Point(along: span.lowerBound, across: line, side: link.side))
+            let to = map.point(Point(along: span.upperBound, across: line, side: link.side))
+            let shift = Point.zero.offset(outward: Self.gap / 2, through: link.side)
+            let inset = link.side.isHorizontal ? CGSize(width: 2, height: 0) : CGSize(width: 0, height: 2)
             var edge = Path()
-            edge.move(to: CGPoint(x: r.minX, y: r.minY + 2))
-            edge.addLine(to: CGPoint(x: r.minX, y: r.maxY - 2))
+            edge.move(to: CGPoint(x: from.x + shift.x + inset.width, y: from.y + shift.y + inset.height))
+            edge.addLine(to: CGPoint(x: to.x + shift.x - inset.width, y: to.y + shift.y - inset.height))
             switch status {
             case .offline:
                 context.stroke(edge, with: .color(.secondary.opacity(0.5)),
@@ -210,7 +213,7 @@ struct StatusPill: View {
 }
 
 /// Maps global display coordinates to the stage and back. The frame leaves room for
-/// the iPhone on every side of every display, so it stays put while the iPhone moves.
+/// the iPhone beside and above every display, so it stays put while the iPhone moves.
 private struct StageMap {
     let size: CGSize
     let origin: Point
@@ -222,8 +225,12 @@ private struct StageMap {
         var union = displays.first?.frame ?? MacHopCore.Rect(x: 0, y: 0, width: 1512, height: 982)
         for display in displays { union = union.union(display.frame) }
         let phone = layout.phoneSize
-        let room = MacHopCore.Rect(x: union.minX - phone.width - 16, y: union.minY - phone.height * 0.35,
-                                   width: union.width + 2 * (phone.width + 16), height: union.height + phone.height * 0.7)
+        // Above: room for a landscape iPhone (or the iPhone as it is, when it's already there).
+        let landscapeHeight = layout.size * layout.aspectRatio
+        let above = max(phone.height * 0.35, (layout.side == .top ? phone.height : landscapeHeight) + 16)
+        let below = phone.height * 0.35
+        let room = MacHopCore.Rect(x: union.minX - phone.width - 16, y: union.minY - above,
+                                   width: union.width + 2 * (phone.width + 16), height: union.height + above + below)
         let pad = 10.0
         scale = min((size.width - 2 * pad) / room.width, (size.height - 2 * pad) / room.height)
         origin = Point(x: room.minX, y: room.minY)
@@ -233,6 +240,10 @@ private struct StageMap {
     func view(_ r: MacHopCore.Rect) -> CGRect {
         CGRect(x: offset.x + (r.minX - origin.x) * scale, y: offset.y + (r.minY - origin.y) * scale,
                width: r.width * scale, height: r.height * scale)
+    }
+
+    func point(_ p: Point) -> CGPoint {
+        CGPoint(x: offset.x + (p.x - origin.x) * scale, y: offset.y + (p.y - origin.y) * scale)
     }
 
     func global(_ p: CGPoint) -> Point {
