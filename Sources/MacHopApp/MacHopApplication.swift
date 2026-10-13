@@ -162,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func makeWindow() -> NSWindow {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 980, height: 700),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 980, height: 780),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
         window.title = "MacHop"
@@ -174,7 +174,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.contentMinSize = NSSize(width: 860, height: 600)
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.setFrameAutosaveName("MacHopMain")
+        // Dry runs render at the default size and leave the saved window frame alone.
+        if !model.dryRun { window.setFrameAutosaveName("MacHopMain") }
         window.center()
         return window
     }

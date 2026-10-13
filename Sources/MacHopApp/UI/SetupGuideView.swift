@@ -3,8 +3,9 @@ import SwiftUI
 import SystemConfiguration
 import MacHopCore
 
-/// First-run setup, one step at a time. Each step ticks itself off when MacHop
-/// can see it is done; the iPhone-side steps MacHop cannot see ask for a click.
+/// First-run setup, one step at a time: a row of steps, and the current one below it.
+/// Each step ticks itself off when MacHop can see it is done; the iPhone-side steps
+/// MacHop cannot see ask for a click.
 struct SetupGuideView: View {
     let model: AppModel
     let onClose: () -> Void
@@ -33,19 +34,18 @@ struct SetupGuideView: View {
             .padding(.top, 44)
             .padding(.bottom, 22)
             Rectangle().fill(Theme.border).frame(height: 1)
-            ScrollViewReader { scroller in
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(Step.allCases, id: \.self) { step in
-                            row(step).id(step)
-                        }
-                    }
-                    .padding(.horizontal, 40)
-                    .padding(.vertical, 24)
+            // Sized to fit without scrolling; it only scrolls in a very short window.
+            ScrollView {
+                VStack(spacing: 22) {
+                    stepper
+                    if let step = shown { panel(step) } else { finished }
                 }
-                .onChange(of: current) { _, step in
-                    withAnimation { scroller.scrollTo(step, anchor: .center) }
-                }
+                .padding(.horizontal, 40)
+                .padding(.vertical, 24)
+            }
+            .onChange(of: current) { _, _ in
+                // Progress moves on to the next step, even from one that was clicked.
+                withAnimation(.snappy) { expanded = nil }
             }
             Rectangle().fill(Theme.border).frame(height: 1)
             footer
@@ -91,45 +91,99 @@ struct SetupGuideView: View {
         .padding(.vertical, 16)
     }
 
-    private func row(_ step: Step) -> some View {
-        let done = isDone(step)
-        let open = step == (expanded ?? current)
-        return Panel(padding: 18) {
-            Button {
-                withAnimation(.snappy) { expanded = open ? nil : step }
-            } label: {
-                HStack(spacing: 14) {
-                    IconTile(symbol: symbol(step), size: 40, tint: done ? .green : open ? .accentColor : .secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title(step)).font(.system(size: 15, weight: .medium))
-                        if let summary = summary(step, done: done) {
-                            Text(summary).font(.system(size: 12.5)).foregroundStyle(.secondary)
+    /// The steps in a row, ticked when done. Clicking one shows it.
+    private var stepper: some View {
+        HStack(spacing: 0) {
+            ForEach(Step.allCases, id: \.self) { step in
+                let done = isDone(step)
+                let selected = step == shown
+                Button {
+                    withAnimation(.snappy) { expanded = step == current ? nil : step }
+                } label: {
+                    VStack(spacing: 8) {
+                        ZStack {
+                            Circle().fill(Theme.canvas)
+                            Circle().fill(done ? Color.green.opacity(0.16) : selected ? Color.accentColor.opacity(0.16) : Theme.card)
+                            Circle().strokeBorder(selected ? Color.accentColor : Theme.border, lineWidth: selected ? 1.5 : 1)
+                            Image(systemName: done ? "checkmark" : symbol(step))
+                                .font(.system(size: done ? 15 : 16, weight: done ? .bold : .regular))
+                                .foregroundStyle(done ? Color.green : selected ? Color.accentColor : Color.secondary)
                         }
+                        .frame(width: 40, height: 40)
+                        Text(shortTitle(step))
+                            .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                            .foregroundStyle(selected ? .primary : .secondary)
+                            .lineLimit(1)
                     }
-                    Spacer()
-                    if done {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(.green)
-                            .accessibilityLabel("Done")
-                    } else if optional(step) {
-                        Text("Optional").font(.system(size: 12)).foregroundStyle(.secondary)
-                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            if open {
-                VStack(alignment: .leading, spacing: 10) { detail(step) }
-                    .padding(.leading, 54)
-                    .padding(.top, 12)
-                    .transition(.opacity)
+                .buttonStyle(.plain)
+                .accessibilityLabel(title(step))
+                .accessibilityValue(done ? "Done" : optional(step) ? "Optional" : "Not done")
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
-        .opacity(done || open || step.rawValue <= (current?.rawValue ?? Step.allCases.count) ? 1 : 0.55)
+        // A line joining the circles, from the first centre to the last.
+        .background(alignment: .top) {
+            GeometryReader { geometry in
+                let inset = geometry.size.width / Double(Step.allCases.count * 2)
+                Rectangle().fill(Theme.border).frame(height: 1)
+                    .padding(.horizontal, inset)
+                    .offset(y: 20)
+            }
+        }
+    }
+
+    private func panel(_ step: Step) -> some View {
+        let done = isDone(step)
+        return Panel(padding: 24) {
+            HStack(spacing: 14) {
+                IconTile(symbol: symbol(step), size: 44, tint: done ? .green : .accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title(step)).font(.system(size: 17, weight: .semibold))
+                    if let summary = summary(step, done: done) {
+                        Text(summary).font(.system(size: 12.5)).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if done {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 22)).foregroundStyle(.green)
+                        .accessibilityLabel("Done")
+                } else if optional(step) {
+                    Text("Optional").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+            VStack(alignment: .leading, spacing: 10) { detail(step) }
+                .padding(.leading, 58)
+                .padding(.top, 14)
+        }
+        .id(step)
+        .transition(.opacity)
+    }
+
+    /// Everything done, gestures included.
+    private var finished: some View {
+        let side = model.settings.session.layout.side == .right ? "right" : "left"
+        return Panel(padding: 24) {
+            HStack(spacing: 14) {
+                IconTile(symbol: "checkmark", size: 44, tint: .green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("MacHop is ready").font(.system(size: 17, weight: .semibold))
+                    Text("Move the pointer past the \(side) edge of your screen to use your iPhone. Press ⌃⌥⌘⎋ to come back at any time.")
+                        .font(.system(size: 13.5)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 
     // MARK: Steps
 
     private var current: Step? { Step.allCases.first { !isDone($0) } }
+
+    /// The step on show: the one clicked, otherwise the first not done yet.
+    private var shown: Step? { expanded ?? current }
 
     private var requiredDone: Bool {
         Step.allCases.filter { !optional($0) }.allSatisfy(isDone)
@@ -174,6 +228,17 @@ struct SetupGuideView: View {
         }
     }
 
+    private func shortTitle(_ step: Step) -> String {
+        switch step {
+        case .bluetooth: "Bluetooth"
+        case .accessibility: "Access"
+        case .phone: "iPhone"
+        case .assistiveTouch: "AssistiveTouch"
+        case .tryIt: "Try It"
+        case .gestures: "Gestures"
+        }
+    }
+
     private func summary(_ step: Step, done: Bool) -> String? {
         switch step {
         case .phone where done: "Connected to \(model.phoneName)"
@@ -205,11 +270,13 @@ struct SetupGuideView: View {
         case .assistiveTouch:
             explain("AssistiveTouch shows the pointer on your iPhone. On your iPhone, open:")
             SettingsPath(parts: ["Settings", "Accessibility", "Touch", "AssistiveTouch"], then: "and turn it on.")
-            Button("It's On") { withAnimation { assistiveTouchOn = true } }.buttonStyle(.borderedProminent)
+            if !isDone(.assistiveTouch) {
+                Button("It's On") { withAnimation { assistiveTouchOn = true } }.buttonStyle(.borderedProminent)
+            }
         case .tryIt:
             let side = model.settings.session.layout.side == .right ? "right" : "left"
             explain("Move the pointer past the \(side) edge of your screen. Come back the same way, or press ⌃⌥⌘⎋ at any time.")
-            waiting("Waiting for you to move onto your iPhone…")
+            if !isDone(.tryIt) { waiting("Waiting for you to move onto your iPhone…") }
         case .gestures:
             gesturesDetail
         }

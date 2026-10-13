@@ -41,7 +41,7 @@ struct MainView: View {
 
     @ViewBuilder private var page: some View {
         switch navigation.page {
-        case .phone: PhonePage(model: model) { navigation.showingSetup = true }
+        case .phone: PhonePage(model: model)
         case .gestures: GesturesPage(model: model) { navigation.showingSetup = true }
         case .scrolling: ScrollingPage(model: model)
         case .settings: SettingsPage(model: model)
@@ -196,23 +196,19 @@ private func sectionTitle(_ text: String) -> some View {
 
 private struct PhonePage: View {
     let model: AppModel
-    let openSetup: () -> Void
     @State private var showingPhones = false
 
     var body: some View {
         PageFrame(overline: "Your iPhone",
                   title: model.settings.phoneID == nil ? "Connect your iPhone" : model.phoneName,
                   subtitle: StatusText.detail(model)) {
-            // Until an iPhone is chosen, choosing one is the first thing to do. After that the section stays put,
-            // so a brief reconnect doesn't reshuffle the page; the status bar below the drawing shows it instead.
-            if needsConnection { connection }
             Panel(padding: 0) {
                 DeviceStage(displays: model.displays, layout: model.settings.session.layout, status: model.stageState) { layout in
                     model.update { $0.session.layout = layout }
                 }
-                .frame(height: 230)
+                .frame(height: 180)
                 .padding(.horizontal, 20)
-                .padding(.top, 14)
+                .padding(.top, 12)
                 .accessibilityLabel("Arrangement: your Mac's screens and your iPhone")
                 .accessibilityValue(arrangementDescription)
                 .accessibilityActions {
@@ -225,48 +221,25 @@ private struct PhonePage: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 6)
-                Rectangle().fill(Theme.border).frame(height: 1).padding(.top, 12)
+                    .padding(.top, 4)
+                Rectangle().fill(Theme.border).frame(height: 1).padding(.top, 10)
                 HStack(spacing: 10) {
                     StatusPill(text: StatusText.title(model), colour: model.statusColour)
                     if let notice = model.notice {
                         Text(notice).font(.system(size: 12.5)).foregroundStyle(.orange).lineLimit(2)
                     }
                     Spacer()
+                    // The connection lives here too: which iPhone, and what to do in this state.
+                    if model.settings.phoneID != nil { Button("Change iPhone…") { showingPhones = true } }
                     primaryActions
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
             }
             Panel { ArrangementControls(model: model) }
-            if !needsConnection { connection }
         }
         .sheet(isPresented: $showingPhones) {
             PhonePicker(model: model) { showingPhones = false }
-        }
-    }
-
-    private var needsConnection: Bool { model.settings.phoneID == nil }
-
-    @ViewBuilder private var connection: some View {
-        sectionTitle("Connection")
-        Panel {
-            SettingRow(symbol: "iphone", title: model.settings.phoneID == nil ? "No iPhone chosen" : model.phoneName,
-                       detail: connectionDetail) {
-                HStack {
-                    if model.settings.phoneID != nil { Button("Reconnect") { model.reconnect() } }
-                    if model.settings.phoneID == nil {
-                        Button("Choose iPhone…") { showingPhones = true }.buttonStyle(.borderedProminent)
-                    } else {
-                        Button("Change…") { showingPhones = true }
-                    }
-                }
-            }
-            RowDivider()
-            SettingRow(symbol: "checklist", title: "Setup Guide",
-                       detail: "Step by step: permissions, AssistiveTouch on your iPhone, and gestures.") {
-                Button("Open…", action: openSetup)
-            }
         }
     }
 
@@ -287,21 +260,10 @@ private struct PhonePage: View {
         case .controlling: Button("Return to Mac") { model.returnToMac() }
         case .connecting, .waitingForPhone: Button("Reconnect") { model.reconnect() }
         case .paused: Button("Turn On") { model.togglePause() }.buttonStyle(.borderedProminent)
-        case .choosePhone: Button("Set Up…", action: openSetup).buttonStyle(.borderedProminent)
+        case .choosePhone: Button("Choose iPhone…") { showingPhones = true }.buttonStyle(.borderedProminent)
         default: Button("Turn Off") { model.togglePause() }
         }
     }
-
-    private var connectionDetail: String {
-        switch model.bluetooth {
-        case .off: "Bluetooth is off"
-        case .unauthorized: "Bluetooth permission needed"
-        case .connected: "Connected over Bluetooth"
-        case .waiting: model.link == .connected ? "Linked, waiting for the iPhone to accept input" : "Waiting for the iPhone"
-        default: "Starting Bluetooth…"
-        }
-    }
-
 }
 
 /// What the drawing doesn't set: the iPhone's size and orientation, pointer speed and edge resistance.
@@ -310,7 +272,7 @@ struct ArrangementControls: View {
 
     var body: some View {
         SettingRow(symbol: "iphone", title: "iPhone model",
-                   detail: "Gives your iPhone its real shape and size on screen.") {
+                   detail: "Sets its real shape and size on screen.") {
             Picker("iPhone model", selection: Binding(get: { model.settings.screen ?? .automatic },
                                                       set: { model.setScreen($0) })) {
                 ForEach(IPhoneScreen.allCases, id: \.self) { choice in
@@ -318,7 +280,7 @@ struct ArrangementControls: View {
                                               : choice.title).tag(choice)
                 }
             }
-            .labelsHidden().frame(width: 270)
+            .labelsHidden().frame(width: 250)
         }
         RowDivider()
         SettingRow(symbol: "rectangle.portrait.rotate", title: "Orientation") {
@@ -330,7 +292,7 @@ struct ArrangementControls: View {
         }
         RowDivider()
         SettingRow(symbol: "cursorarrow.motionlines", title: "Pointer speed on iPhone",
-                   detail: "How far the iPhone's pointer moves for the same hand movement.") {
+                   detail: "How far the pointer moves on your iPhone.") {
             SpeedSlider(speed: model.binding(\.session.pointerSpeed), range: SessionSettings.pointerSpeedRange)
                 .frame(width: 250)
         }

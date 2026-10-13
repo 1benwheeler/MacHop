@@ -148,7 +148,7 @@ enum StatusText {
         case .bluetoothOff: return "Turn on Bluetooth to connect to your iPhone."
         case .bluetoothDenied: return "Allow MacHop in System Settings → Privacy & Security → Bluetooth."
         case .bluetoothUnavailable(let message): return message
-        case .choosePhone: return "Open Settings and choose Find iPhone."
+        case .choosePhone: return "Choose your iPhone to get started."
         case .connecting: return "Keep your iPhone nearby and unlocked."
         case .waitingForPhone: return "Your iPhone is linked; waiting for it to accept the keyboard and pointer."
         case .blocked(let reason): return reason
