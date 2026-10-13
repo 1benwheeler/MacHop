@@ -28,6 +28,18 @@ final class SystemMonitor {
 
     static var secureInputActive: Bool { IsSecureEventInputEnabled() }
 
+    /// True while Mission Control or App Exposé is showing. macOS keeps the cursor
+    /// visible over it, so hopping onto the iPhone would leave two pointers. The Dock
+    /// then covers the screen with a window at layer 18, which it has at no other time.
+    /// Takes a few milliseconds, so it's checked only when crossing.
+    static var missionControlShowing: Bool {
+        guard let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first?.processIdentifier,
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return false }
+        return windows.contains {
+            ($0[kCGWindowOwnerPID as String] as? Int32) == dock && ($0[kCGWindowLayer as String] as? Int) == 18
+        }
+    }
+
     func start() {
         let workspace = NSWorkspace.shared.notificationCenter
         observe(workspace, NSWorkspace.willSleepNotification) { $0.asleep = true }

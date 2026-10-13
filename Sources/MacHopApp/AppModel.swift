@@ -135,7 +135,9 @@ final class AppModel {
             self?.lastPhoneAction = (action, ProcessInfo.processInfo.systemUptime)
         }
         session.entryGuard = {
-            SystemMonitor.secureInputActive ? "A password field on your Mac is using Secure Input." : nil
+            if SystemMonitor.secureInputActive { return "A password field on your Mac is using Secure Input." }
+            if SystemMonitor.missionControlShowing { return "Close Mission Control to move onto your iPhone." }
+            return nil
         }
         session.onEntryRefused = { [weak self] reason in self?.show(notice: reason) }
     }
