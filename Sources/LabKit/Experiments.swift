@@ -423,9 +423,10 @@ public final class Lab {
     public struct RoundTrip {
         public var entered: Bool
         public var pointerSeen: Bool?
-        public var scrolled: Bool
+        /// Nil when two-finger scrolling is off in MacHop, so there's nothing to check.
+        public var scrolled: Bool?
         public var returned: Bool
-        public var passed: Bool { entered && returned && scrolled && pointerSeen != false }
+        public var passed: Bool { entered && returned && scrolled != false && pointerSeen != false }
     }
 
     /// Full Mac → iPhone → Mac transitions through MacHop's real input session:
@@ -459,17 +460,20 @@ public final class Lab {
                 guard let reference, let moved else { return nil }
                 return !FrameAnalysis.changedRegions(reference, moved).isEmpty
             }()
-            // Two-finger scroll with phases, as the trackpad sends it.
-            let before = screen.frame()
-            try app.send(["cmd": "scroll", "dy": 0, "phase": "mayBegin"])
-            for index in 0..<10 {
-                // A short stroke and a long settle keep iOS's momentum within what the lab can measure.
-                try app.send(["cmd": "scroll", "dy": trip % 2 == 0 ? 4 : -4, "phase": index == 0 ? "began" : "changed"])
-                pause(0.012)
+            // Two-finger scroll with phases, as the trackpad sends it (unless scrolling is off in MacHop).
+            var scrolled: Bool?
+            if (status["scrollStyle"] as? String) != "off" {
+                let before = screen.frame()
+                try app.send(["cmd": "scroll", "dy": 0, "phase": "mayBegin"])
+                for index in 0..<10 {
+                    // A short stroke and a long settle keep iOS's momentum within what the lab can measure.
+                    try app.send(["cmd": "scroll", "dy": trip % 2 == 0 ? 4 : -4, "phase": index == 0 ? "began" : "changed"])
+                    pause(0.012)
+                }
+                try app.send(["cmd": "scroll", "dy": 0, "phase": "ended"])
+                let after = settledFrame(after: 2.5)
+                scrolled = before.flatMap { b in after.map { FrameAnalysis.verticalShift(from: b, to: $0).moved } } ?? false
             }
-            try app.send(["cmd": "scroll", "dy": 0, "phase": "ended"])
-            let after = settledFrame(after: 2.5)
-            let scrolled = before.flatMap { b in after.map { FrameAnalysis.verticalShift(from: b, to: $0).moved } } ?? false
             // Back across the edge.
             var returned = false
             for _ in 0..<200 {
@@ -481,7 +485,7 @@ public final class Lab {
             let result = RoundTrip(entered: entered, pointerSeen: pointerSeen, scrolled: scrolled, returned: returned)
             results.append(result)
             log("  trip \(trip): entered \(entered), pointer \(pointerSeen.map { $0 ? "seen" : "NOT seen" } ?? "n/a"), " +
-                "scrolled \(scrolled), returned \(returned) → \(result.passed ? "PASS" : "FAIL")")
+                "scrolled \(scrolled.map { "\($0)" } ?? "n/a (scrolling off)"), returned \(returned) → \(result.passed ? "PASS" : "FAIL")")
             pause(0.35)
         }
         return results

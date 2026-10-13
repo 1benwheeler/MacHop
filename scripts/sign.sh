@@ -20,7 +20,8 @@ if [[ -z "$identity" && -f "$keychain" ]]; then
     # permission. The lab tool is left without it: it needs the camera entitlement.
     runtime=()
     [[ "$identifier" == local.machop ]] && runtime=(--options runtime)
-    codesign --force --sign "MacHop Local Signing" --keychain "$keychain" "${runtime[@]}" --identifier "$identifier" "$app"
+    # (macOS's bash 3.2 treats an empty "${runtime[@]}" as unbound, hence the guard.)
+    codesign --force --sign "MacHop Local Signing" --keychain "$keychain" ${runtime[@]+"${runtime[@]}"} --identifier "$identifier" "$app"
     security list-keychains -d user -s $original
     trap - EXIT
 elif [[ -z "$identity" || "$identity" == "-" ]]; then

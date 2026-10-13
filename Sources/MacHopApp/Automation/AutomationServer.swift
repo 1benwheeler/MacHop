@@ -299,6 +299,7 @@ final class AutomationServer {
             "ready": model.transport.isReady,
             "subscriptions": model.transport.subscribedReports.sorted().map(Int.init),
             "profile": model.settings.profile.rawValue,
+            "scrollStyle": model.settings.session.scroll.style.rawValue,
             "status": StatusText.title(model),
             "queued": model.transport.queuedCount,
             "submitted": model.transport.stats.submitted,

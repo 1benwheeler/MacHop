@@ -5,13 +5,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 app="build/MacHop Lab.app"
-if [[ ! -d "$app" || .build/release/machop-lab -nt "$app/Contents/MacOS/machop-lab" || "${1:-}" == "--rebuild" ]]; then
-    [[ "${1:-}" == "--rebuild" ]] && shift
-    swift build -c release --product machop-lab >/dev/null
+# Build every time (quick when nothing changed), so the lab always matches the sources.
+swift build -c release --product machop-lab >/dev/null
+rebuild=false
+[[ "${1:-}" == "--rebuild" ]] && rebuild=true && shift
+if [[ $rebuild == true || ! -d "$app" || .build/release/machop-lab -nt "$app/Contents/MacOS/machop-lab" ]]; then
     rm -rf "$app" && mkdir -p "$app/Contents/MacOS"
     cp .build/release/machop-lab "$app/Contents/MacOS/"
     cp Resources/Lab/Info.plist "$app/Contents/"
-    scripts/sign.sh "$app" local.machop.lab >/dev/null
+    # An unsigned lab is refused by MacHop, so don't leave one behind.
+    scripts/sign.sh "$app" local.machop.lab >/dev/null || { rm -rf "$app"; exit 1; }
 fi
 out=$(mktemp) err=$(mktemp)
 status=0
