@@ -53,7 +53,7 @@ final class AppModel {
     @ObservationIgnored private var traceUntil = 0.0
     @ObservationIgnored private var stopping = false
     /// `--dry-run --demo`: show a connected iPhone for screenshots (no Bluetooth or capture runs).
-    @ObservationIgnored private var demo = false
+    @ObservationIgnored private(set) var demo = false
     /// `--dry-run`: run the app shell without Bluetooth or input capture (launch checks).
     @ObservationIgnored let dryRun = CommandLine.arguments.contains("--dry-run")
 
@@ -394,11 +394,14 @@ final class AppModel {
         settings.phoneModel = "iPhone16,1"
         settings.hasCrossed = true
         settings.paused = false
-        // `--demo-top`: a landscape iPhone above the screen.
-        if CommandLine.arguments.contains("--demo-top") {
-            settings.session.layout.side = .top
-            settings.session.layout.orientation = .landscape
-        }
+        settings.gestureSetup = nil
+        // The standard arrangement, so screenshots don't depend on this Mac's settings:
+        // portrait on the right, or with `--demo-top`, landscape above the screen.
+        let top = CommandLine.arguments.contains("--demo-top")
+        settings.session.layout.side = top ? .top : .right
+        settings.session.layout.edgePosition = top ? 0.7 : 0.5
+        settings.session.layout.orientation = top ? .landscape : .portrait
+        settings.session.layout.flipped = false
     }
 
     /// Chooses the iPhone's screen (or automatic, from the model it reports) and sizes the layout to it.

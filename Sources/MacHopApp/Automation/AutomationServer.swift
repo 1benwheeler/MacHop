@@ -268,6 +268,18 @@ final class AutomationServer {
             }
             return ["ok": true]
 
+        case "settings.layout":
+            // For lab runs on another edge; any field left out stays as it is.
+            model.update {
+                if let side = (request["side"] as? String).flatMap(Side.init(rawValue:)) { $0.session.layout.side = side }
+                if let position = request["edgePosition"] as? Double { $0.session.layout.edgePosition = position }
+                if let orientation = (request["orientation"] as? String).flatMap(Orientation.init(rawValue:)) {
+                    $0.session.layout.orientation = orientation
+                }
+                if let flipped = request["flipped"] as? Bool { $0.session.layout.flipped = flipped }
+            }
+            return ["ok": true]
+
         case "pause", "resume":
             if model.settings.paused != (command == "pause") { model.togglePause() }
             return ["ok": true]
@@ -304,7 +316,8 @@ final class AutomationServer {
         if let link = session.screenLink {
             // `line` is across the edge (an x beside the screen, a y above it); `start` and `end` run along it.
             let layout = session.settings.layout
-            result["layout"] = ["orientation": layout.orientation.rawValue, "flipped": layout.flipped]
+            result["layout"] = ["side": layout.side.rawValue, "edgePosition": layout.edgePosition,
+                                "orientation": layout.orientation.rawValue, "flipped": layout.flipped]
             result["edge"] = ["line": link.edgeLine, "start": link.openSpans[0].lowerBound, "end": link.openSpans[0].upperBound,
                               "side": link.side.rawValue]
         }

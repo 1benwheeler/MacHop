@@ -302,7 +302,9 @@ struct SetupGuideView: View {
     @ViewBuilder private var gesturesDetail: some View {
         explain("Swipe with three fingers on your iPhone, as on an iPad: up for Home, up and hold for the App Switcher, down for Notification Centre. Your iPhone needs to learn them once, which takes about a minute.")
         explain(model.owner == .phone ? "On your iPhone, open:" : "Move onto your iPhone, then on your iPhone open:")
-        SettingsPath(parts: ["Settings", "Accessibility", "Touch", "AssistiveTouch", "Devices", Self.macName,
+        // Screenshots show a generic name, not this Mac's.
+        let macName = model.demo ? "MacBook Pro" : Self.macName
+        SettingsPath(parts: ["Settings", "Accessibility", "Touch", "AssistiveTouch", "Devices", macName,
                              "Customise Additional Buttons"])
         VStack(alignment: .leading, spacing: 8) {
             gestureStep(.home, "Swipe up with three fingers, then choose **Home**.")

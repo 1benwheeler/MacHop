@@ -34,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         if model.dryRun {
             if CommandLine.arguments.contains("--demo") { model.enterDemoMode() }
+            // `--light`: render in light mode whatever the system uses (for the README).
+            if CommandLine.arguments.contains("--light") { NSApp.appearance = NSAppearance(named: .aqua) }
             // Lay out the window off screen to check the UI builds, without taking focus.
             let window = makeWindow()
             window.contentView?.layoutSubtreeIfNeeded()
