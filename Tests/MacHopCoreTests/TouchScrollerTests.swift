@@ -98,7 +98,8 @@ struct TouchScrollerTests {
         check(actions, scroller)
         // Every stroke starts where the pointer was.
         let presses = actions.compactMap { if case .press(let p) = $0 { p } else { nil } }
-        #expect(presses.count > 5 && presses.allSatisfy { $0 == anchor })
+        let strokes = Int(800 / (size.height * TouchScroller.strokeSpan))
+        #expect(presses.count >= strokes && presses.allSatisfy { $0 == anchor }, "\(presses.count) strokes")
         // No stroke carries the pointer further than its span from where it pressed.
         let span = size.height * TouchScroller.strokeSpan
         var pressed = anchor, moved = 0.0

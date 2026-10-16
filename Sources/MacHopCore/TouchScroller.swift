@@ -40,7 +40,7 @@ public struct TouchScroller: Sendable {
     static let minimumRoom = 40.0
     /// The furthest one stroke carries the pointer before re-gripping, as a share of
     /// the screen's height.
-    public static let strokeSpan = 0.12
+    public static let strokeSpan = 0.3
     /// How long a re-grip waits between letting go and pressing again (seconds). iOS's
     /// own glide carries the content on meanwhile.
     public static let regripGap = 0.05
