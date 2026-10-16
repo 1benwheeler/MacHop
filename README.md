@@ -62,7 +62,7 @@ MacHop opens a setup guide the first time you run it, and ticks off each step as
 3. Choose your iPhone.
 4. Turn on **AssistiveTouch** on the iPhone.
 5. Move onto your iPhone once.
-6. *Optional:* teach your iPhone the three-finger gestures. It takes about a minute, and the guide walks you through each swipe.
+6. *Optional:* teach your iPhone the App Switcher and Notification Centre swipes. Home works straight away; the other two take about a minute, and the guide walks you through them.
 
 You can reopen the guide at any time from the menu bar.
 
@@ -75,14 +75,15 @@ MacHop lives in your menu bar. Its menu has a switch to turn it off and on, your
 </p>
 
 - **Match the drawing to your iPhone:** drag it to the side or top of your screen where it really sits, and choose Portrait or Landscape. If the Dynamic Island is on the other side from the drawing's, click **Flip**, or the pointer will move the wrong way on the iPhone.
-- **Two-finger scrolling** works like holding the button and dragging, with the iPhone's own momentum. iPhone can't scroll with the pointer standing still, so you can turn this off on the Scrolling page if you'd rather drag by hand.
+- **Two-finger scrolling:** choose how it works on the Scrolling page. **Drag** (the default) scrolls smoothly, like a finger, with the iPhone's own momentum; on long scrolls the pointer hops back so it stays near where you started. **Scroll wheel** keeps the pointer still, but iPhone moves the page in small steps. Or turn it off and drag by hand.
 - **Volume and media keys** stay with your Mac unless you choose to send them to the iPhone (Settings).
 - **Pointer speed** and **edge resistance** are on the My iPhone page; the defaults suit most people.
 
 ## Limitations
 
 - The pointer on the iPhone is AssistiveTouch's grey circle. iOS draws it and fades it about 15 seconds after you stop moving it; it can't be hidden sooner.
-- Gestures need the one-time AssistiveTouch setup, and pinch to zoom isn't possible: iPhone ignores touch input from Bluetooth devices.
+- The App Switcher and Notification Centre gestures need a one-time AssistiveTouch setup, and pinch to zoom isn't possible: iPhone ignores touch input from Bluetooth devices.
+- iPhone can't scroll smoothly with the pointer standing still: a scroll wheel moves the page in steps, which is why Drag is the default.
 - The iPhone sits to the left or right of a display, or above it. Below is planned.
 - While a password field on your Mac uses Secure Input, or Mission Control is open, MacHop won't hand input to the iPhone.
 - Hiding the Mac's pointer uses a private macOS feature that keyboard-and-mouse sharing tools rely on. A future macOS could change it, and it rules out the Mac App Store.
