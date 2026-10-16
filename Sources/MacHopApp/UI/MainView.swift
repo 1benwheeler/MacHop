@@ -110,6 +110,7 @@ private struct Sidebar: View {
         case .ready: "Connected"
         case .paused: "Off"
         case .connecting, .waitingForPhone: "Connecting…"
+        case .phoneLocked: "Locked"
         case .choosePhone: "Not set up"
         case .blocked: "On hold"
         default: "Needs attention"

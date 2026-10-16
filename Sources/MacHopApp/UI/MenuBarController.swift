@@ -42,7 +42,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         switch model.status {
         case .ready, .controlling:
             image = Self.mark
-        case .paused, .connecting, .waitingForPhone, .choosePhone, .blocked:
+        case .paused, .connecting, .waitingForPhone, .phoneLocked, .choosePhone, .blocked:
             image = Self.mark
             dimmed = true
         case .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable:
@@ -134,6 +134,7 @@ enum StatusText {
         case .choosePhone: "Choose Your iPhone"
         case .connecting: "Connecting to \(model.phoneName)…"
         case .waitingForPhone: "Waiting for \(model.phoneName)…"
+        case .phoneLocked: "Unlock \(model.phoneName)"
         case .blocked: "Input Stays on Your Mac"
         }
     }
@@ -151,6 +152,7 @@ enum StatusText {
         case .choosePhone: return "Choose your iPhone to get started."
         case .connecting: return "Keep your iPhone nearby and unlocked."
         case .waitingForPhone: return "Your iPhone is linked; waiting for it to accept the keyboard and pointer."
+        case .phoneLocked: return "Your iPhone pauses the keyboard and pointer while it's locked."
         case .blocked(let reason): return reason
         }
     }
@@ -218,6 +220,7 @@ private struct MenuDeviceRow: View {
         case .ready: "Connected"
         case .paused: "MacHop is off"
         case .connecting, .waitingForPhone: "Connecting…"
+        case .phoneLocked: "Locked"
         case .choosePhone: "Choose your iPhone to begin"
         case .blocked(let reason): reason
         default: StatusText.title(model)

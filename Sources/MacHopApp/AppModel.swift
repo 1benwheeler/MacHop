@@ -15,6 +15,8 @@ final class AppModel {
         case choosePhone
         case connecting
         case waitingForPhone
+        /// Linked and subscribed, but the iPhone has paused input (it's locked or asleep).
+        case phoneLocked
         case ready
         case controlling
         case paused
@@ -228,6 +230,7 @@ final class AppModel {
         if settings.phoneID == nil && !phoneReady { return .choosePhone }
         if let reason = monitor.blockingReason { return .blocked(reason) }
         if phoneReady { return session.screenLink == nil ? .blocked("Check the arrangement in Settings.") : .ready }
+        if link == .connected && transport.isSuspended { return .phoneLocked }
         return link == .connected ? .waitingForPhone : .connecting
     }
 
@@ -340,12 +343,15 @@ final class AppModel {
     /// times, then tell the user. One check at a time, so reconnects can't keep
     /// postponing it.
     private func watchLink() {
-        guard !linkCheckPending, link == .connected, !transport.isReady else { return }
+        // A locked iPhone pauses input on purpose; reconnecting would only wake it up
+        // every few seconds. The watchdog is for links that never start accepting input.
+        guard !linkCheckPending, link == .connected, !transport.isReady, !transport.isSuspended else { return }
         linkCheckPending = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.linkCheckPending = false
+                guard !self.transport.isSuspended else { return }
                 guard !self.transport.isReady, self.settings.phoneID != nil, !self.dryRun else { return }
                 self.linkAttempts += 1
                 if self.linkAttempts <= 3 {
