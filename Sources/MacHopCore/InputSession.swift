@@ -6,7 +6,13 @@
 public protocol HIDLink: AnyObject {
     /// True when the phone is subscribed and accepting input.
     var isReady: Bool { get }
+    /// False for a relative pointer, whose position on the phone is only an estimate.
+    var pointerIsAbsolute: Bool { get }
     func send(_ report: HIDReport)
+}
+
+public extension HIDLink {
+    var pointerIsAbsolute: Bool { true }
 }
 
 /// Controls the Mac cursor. Implemented with CoreGraphics in the app.
@@ -735,7 +741,8 @@ public final class InputSession {
         }
         guard input.phase != .mayBegin, let pointer = phonePointer, let screenLink else { return }
         if scroller == nil {
-            scroller = TouchScroller(anchor: pointer, phoneSize: (screenLink.phone.width, screenLink.phone.height))
+            scroller = TouchScroller(anchor: pointer, phoneSize: (screenLink.phone.width, screenLink.phone.height),
+                                     regrip: link.pointerIsAbsolute)
         }
         let scale = settings.scroll.speed * (settings.scroll.reversed ? -1 : 1)
         // Natural scrolling: the content (and so the touch) follows the fingers.
@@ -764,7 +771,7 @@ public final class InputSession {
         for action in actions {
             let (point, buttons): (Point, UInt8) = switch action {
             case .press(let p), .move(let p): (p, phoneButtons | MouseButton.left.hidBit)
-            case .release(let p): (p, phoneButtons)
+            case .release(let p), .hop(let p): (p, phoneButtons)
             }
             link.send(.pointer(pointerReport(at: point, buttons: buttons)))
         }

@@ -580,3 +580,37 @@ extension Lab {
         try drag(from: (0.5, down ? 0.82 : 0.2), to: (0.5, down ? 0.2 : 0.82), steps: 30, fling: false)
     }
 }
+
+extension Lab {
+    /// A long two-finger scroll through MacHop (as the trackpad sends it), on the Settings
+    /// list: how the content moves, where the pointer ends up, and that nothing was tapped.
+    public func sessionLongScroll(events: Int = 80, points: Double = 15, upwards: Bool = false) throws
+        -> (smoothness: Smoothness, pointerBefore: (Double, Double)?, pointerAfter: (Double, Double)?, stillSettings: Bool) {
+        try requireExpectedScreen()
+        try app.send(["cmd": "enter"])
+        if let edge = LabEdge(status: try app.status()) {
+            let deeper = edge.delta(outward: 20)
+            for _ in 0..<8 { try app.send(["cmd": "move", "dx": deeper.dx, "dy": deeper.dy]); rest(0.01) }
+        }
+        rest(0.5)
+        func pointer() throws -> (Double, Double)? {
+            guard let p = try app.status()["phonePointer"] as? [String: Any], let x = p["x"] as? Double, let y = p["y"] as? Double else { return nil }
+            return (x, y)
+        }
+        let before = try pointer()
+        let dy = upwards ? points : -points
+        let trace = try trace(duration: Double(events) * 0.016 + 2.0) {
+            try self.app.send(["cmd": "scroll", "dy": 0, "phase": "mayBegin"])
+            for index in 0..<events {
+                try self.app.send(["cmd": "scroll", "dy": dy, "phase": index == 0 ? "began" : "changed"])
+                Thread.sleep(forTimeInterval: 0.016)
+            }
+            try self.app.send(["cmd": "scroll", "dy": 0, "phase": "ended"])
+        }
+        let after = try pointer()
+        try app.send(["cmd": "return"])
+        rest(1)
+        let still = screen.recognizedText().contains { $0.trimmingCharacters(in: .whitespaces) == "Settings" }
+        return (smoothness(trace, steps: nil), before, after, still)
+    }
+}

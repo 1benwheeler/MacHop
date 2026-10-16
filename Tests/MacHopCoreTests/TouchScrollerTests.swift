@@ -30,6 +30,9 @@ struct TouchScrollerTests {
                         sourceLocation: sourceLocation)
                 pressedAt = nil
                 at = p
+            case .hop(let p):
+                #expect(pressedAt == nil, "hop while pressed", sourceLocation: sourceLocation)
+                at = p
             }
             #expect(scroller.safeArea.contains(at) || at.x == scroller.safeArea.maxX - 1 || at.y == scroller.safeArea.maxY - 1,
                     "touch at \(at) outside the safe area", sourceLocation: sourceLocation)
@@ -77,7 +80,7 @@ struct TouchScrollerTests {
         }
     }
 
-    @Test("A long scroll lets go at the boundary once, with no jumps or restarts")
+    @Test("A long scroll re-grips from the pointer's spot instead of running it to the top, losing no movement")
     func longScroll() {
         let anchor = Point(x: 140, y: 300)
         var scroller = TouchScroller(anchor: anchor, phoneSize: size)
@@ -85,11 +88,36 @@ struct TouchScrollerTests {
         for _ in 0..<100 { actions += scroller.scroll(by: Point(x: 0, y: -20)) }
         actions += scroller.finish()
         check(actions, scroller)
-        let presses = actions.filter { if case .press = $0 { true } else { false } }
-        #expect(presses == [.press(anchor)], "one drag, starting exactly at the pointer")
-        // It let go at the top of the safe area, where the pointer now stays.
-        #expect(scroller.endPoint.y == scroller.safeArea.minY)
-        #expect(actions.last == .release(scroller.endPoint))
+        // Every stroke starts where the pointer was.
+        let presses = actions.compactMap { if case .press(let p) = $0 { p } else { nil } }
+        #expect(presses.count > 5 && presses.allSatisfy { $0 == anchor })
+        // No stroke carries the pointer further than its span from where it pressed.
+        let span = size.height * TouchScroller.strokeSpan
+        var pressed = anchor, moved = 0.0
+        for action in actions {
+            switch action {
+            case .press(let p): pressed = p
+            case .move(let p): #expect(abs(p.y - pressed.y) <= span + 0.001)
+            case .release(let p): moved += p.y - pressed.y
+            case .hop: break
+            }
+        }
+        // All 2,000 points of finger movement reach the content.
+        #expect(abs(moved + 2000) < 1)
+        #expect(abs(scroller.endPoint.y - anchor.y) <= span + 0.001, "the pointer ends near where it began")
+    }
+
+    @Test("Reversing near the edge re-grips somewhere with room, never in a flurry of tiny strokes")
+    func reversalNearEdge() {
+        // The pointer starts low down, scrolls up (pressing near the bottom), then reverses.
+        var scroller = TouchScroller(anchor: Point(x: 140, y: 560), phoneSize: size)
+        var actions: [TouchScroller.Action] = []
+        for _ in 0..<30 { actions += scroller.scroll(by: Point(x: 0, y: -20)) }
+        for _ in 0..<60 { actions += scroller.scroll(by: Point(x: 0, y: 20)) }
+        actions += scroller.finish()
+        check(actions, scroller)
+        let presses = actions.filter { if case .press = $0 { true } else { false } }.count
+        #expect(presses < 20, "\(presses) strokes for 1,800 points of movement")
     }
 
     @Test("The drag starts exactly at the pointer whenever there is room")

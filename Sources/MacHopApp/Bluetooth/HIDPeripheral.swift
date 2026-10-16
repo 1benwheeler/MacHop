@@ -208,6 +208,9 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
         return [battery, device, hid]
     }
 
+    /// What a characteristic serves on request (for tests).
+    func servedValue(_ characteristic: CBCharacteristic) -> Data? { values[ObjectIdentifier(characteristic)] }
+
     private func resetLink() {
         central = nil
         subscribedCentral = nil

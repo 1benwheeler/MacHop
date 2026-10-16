@@ -304,6 +304,20 @@ case "at-actions":
         print(actions.joined(separator: " | "))
     } catch { fail("\(error)") }
 
+case "long-scroll":
+    // A long two-finger scroll through MacHop on the Settings list (drag mode re-grips).
+    let app = connectApp()
+    requireReady(app)
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        for upwards in [false, true] {
+            let r = try lab.sessionLongScroll(upwards: upwards)
+            func fmt(_ p: (Double, Double)?) -> String { p.map { String(format: "(%.2f, %.2f)", $0.0, $0.1) } ?? "?" }
+            print("\(upwards ? "up" : "down"): \(r.smoothness); pointer \(fmt(r.pointerBefore)) → \(fmt(r.pointerAfter)); still on Settings: \(r.stillSettings)")
+            Thread.sleep(forTimeInterval: 1.5)
+        }
+    } catch { fail("\(error)") }
+
 case "chained-drags":
     // Short drags in a row with the pointer hopping back: smoothness of the content. Settings only.
     let app = connectApp()

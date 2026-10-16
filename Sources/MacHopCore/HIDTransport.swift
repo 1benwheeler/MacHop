@@ -85,6 +85,7 @@ public final class HIDTransport: HIDLink {
     }
 
     public var queuedCount: Int { queue.count }
+    public var pointerIsAbsolute: Bool { profile.isAbsolute }
 
     // MARK: Link lifecycle (called by the radio adapter)
 

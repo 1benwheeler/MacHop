@@ -142,9 +142,12 @@ struct GATTTests {
 
     @Test("Every input report notifies with encryption; the map is the profile's", arguments: HIDProfile.Variant.allCases)
     func reportCharacteristics(variant: HIDProfile.Variant) throws {
-        let hid = try #require(services(variant).last?.characteristics as? [CBMutableCharacteristic])
+        let peripheral = HIDPeripheral(transport: HIDTransport(profile: HIDProfile(variant), scheduler: MainScheduler()))
+        let hid = try #require(peripheral.buildServices().last?.characteristics as? [CBMutableCharacteristic])
         let map = try #require(hid.first { $0.uuid == expanded("2A4B") })
-        #expect(map.value == Data(HIDProfile(variant).reportMap))
+        // Served on request (so reads can be logged), not as a fixed value.
+        #expect(map.value == nil)
+        #expect(peripheral.servedValue(map) == Data(HIDProfile(variant).reportMap))
         let inputs = hid.filter { characteristic in
             characteristic.uuid == expanded("2A4D") && characteristic.properties.contains(.notifyEncryptionRequired)
         }
