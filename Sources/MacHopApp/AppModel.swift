@@ -143,6 +143,13 @@ final class AppModel {
             return nil
         }
         session.onEntryRefused = { [weak self] reason in self?.show(notice: reason) }
+        if AutomationServer.isEnabled {
+            // Lab only: scroll amounts and the wheel steps sent, to study how scrolling feels.
+            session.onScrollTrace = { input, report in
+                Log.input.info("scroll dy \(input.dy, format: .fixed(precision: 1)) phase \(String(describing: input.phase), privacy: .public) momentum \(String(describing: input.momentum), privacy: .public) → wheel \(report.wheel)")
+            }
+            session.onPhoneTrace = { Log.input.info("phone: \($0, privacy: .public)") }
+        }
     }
 
     // MARK: Sleep

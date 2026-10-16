@@ -316,27 +316,27 @@ extension Lab {
         }
     }
 
-    /// Runs `input`, recording frames for `duration` seconds from its start.
+    /// Runs `input`, measuring the content's movement frame by frame for `duration`
+    /// seconds from its start. Each frame is compared with the one before as it arrives,
+    /// so nothing piles up in memory.
     func trace(duration: Double, _ input: @escaping () throws -> Void) throws -> MotionTrace {
-        var frames: [Frame] = []
+        guard let size = screen.pixelSize else { return MotionTrace(samples: []) }
+        // Captured pixels per point (iPhone 15 Pro: 3).
+        let pixelsPerPoint = Double(size.width) / 393.0
         let start = uptime
         let worker = Thread { try? input() }
         worker.start()
+        var previous: Frame?
+        var position = 0.0
+        var samples: [(time: Double, points: Double)] = []
         var last = start - 0.001
         while uptime - start < duration {
-            if let frame = screen.frame(after: last, timeout: 0.2), frame.time > last {
-                frames.append(frame)
-                last = frame.time
+            guard let frame = screen.frame(after: last, timeout: 0.2), frame.time > last else { continue }
+            last = frame.time
+            if let previous {
+                let shift = FrameAnalysis.verticalShift(from: previous, to: frame, maxShift: Int(Double(size.height) * 0.3))
+                if shift.moved { position += Double(shift.pixels) / pixelsPerPoint }
             }
-        }
-        guard let size = screen.pixelSize, var previous = frames.first else { return MotionTrace(samples: []) }
-        // Captured pixels per point (iPhone 15 Pro: 3).
-        let pixelsPerPoint = Double(size.width) / 393.0
-        var position = 0.0
-        var samples: [(Double, Double)] = [(previous.time - start, 0)]
-        for frame in frames.dropFirst() {
-            let shift = FrameAnalysis.verticalShift(from: previous, to: frame, maxShift: Int(Double(size.height) * 0.3))
-            if shift.moved { position += Double(shift.pixels) / pixelsPerPoint }
             samples.append((frame.time - start, position))
             previous = frame
         }
@@ -386,5 +386,53 @@ extension Lab {
         }))
         try app.send(["cmd": "return"])
         return results
+    }
+}
+
+extension Lab {
+    /// Records the screen for `seconds` while someone scrolls by hand, and returns the
+    /// content's movement in 100 ms slices (points; positive = page moved up).
+    public func watchScrolling(seconds: Double) throws -> (trace: MotionTrace, slices: [Double]) {
+        let trace = try trace(duration: seconds) {}
+        var slices: [Double] = []
+        var previous = 0.0
+        var edge = 0.1
+        for sample in trace.samples {
+            while sample.time > edge {
+                slices.append(sample.points - previous)
+                previous = sample.points
+                edge += 0.1
+            }
+        }
+        return (trace, slices)
+    }
+}
+
+extension Lab {
+    /// Several separate scroll gestures with the pointer still, without and then with a
+    /// tiny pointer nudge before each. Pointer and wheel only; works on whatever is showing.
+    public func wheelNeedsNudge(gestures: Int = 3) throws -> (still: [Double], nudged: [Double]) {
+        func gesture(nudge: Bool, direction: Int) throws -> Double {
+            if nudge {
+                try app.send(["cmd": "hid.pointer", "x": 0.501, "y": 0.55])
+                rest(0.03)
+                try app.send(["cmd": "hid.pointer", "x": 0.5, "y": 0.55])
+                rest(0.03)
+            }
+            let moved = try trace(duration: 1.0) {
+                for _ in 0..<6 {
+                    try self.app.send(["cmd": "hid.scroll", "wheel": direction])
+                    Thread.sleep(forTimeInterval: 0.04)
+                }
+            }
+            rest(0.8)
+            return abs(moved.samples.last?.points ?? 0)
+        }
+        try app.send(["cmd": "hid.pointer", "x": 0.5, "y": 0.55])
+        rest(1)
+        var still: [Double] = [], nudged: [Double] = []
+        for index in 0..<gestures { still.append(try gesture(nudge: false, direction: index % 2 == 0 ? 1 : -1)) }
+        for index in 0..<gestures { nudged.append(try gesture(nudge: true, direction: index % 2 == 0 ? 1 : -1)) }
+        return (still, nudged)
     }
 }

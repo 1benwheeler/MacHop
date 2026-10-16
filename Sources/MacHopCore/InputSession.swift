@@ -117,6 +117,12 @@ public final class InputSession {
     /// Consulted just before the phone takes input; a non-nil reason refuses the
     /// crossing (for example while macOS Secure Input protects a password field).
     public var entryGuard: (() -> String?)?
+    /// Each two-finger scroll event sent to the phone as wheel steps, for diagnosing feel
+    /// (amounts and phases only).
+    public var onScrollTrace: ((ScrollInput, ScrollReport) -> Void)?
+    /// Pointer presses on the phone and home-indicator decisions, for the same purpose.
+    public var onPhoneTrace: ((String) -> Void)?
+
     /// Called when `entryGuard` refused a crossing.
     public var onEntryRefused: ((String) -> Void)?
     /// Runs work later on the main actor; used to release a drag-scroll whose
@@ -491,11 +497,13 @@ public final class InputSession {
         let start = screenFraction(press.start), now = screenFraction(pointer)
         if start.y - now.y >= Self.homeSwipeDistance {
             homeIndicatorPress?.wentHome = true
+            onPhoneTrace?("home indicator swipe: sent the Home key")
             link.send(.consumer(ConsumerReport(usage: ConsumerReport.menu)))
             let release = { [weak self] in self?.link.send(.consumer(.released)) }
             if let schedule { schedule(0.06) { release() } } else { release() }
         } else if abs(now.x - start.x) >= Self.homeSwipeDistance * 1.5 {
             // Switching apps along the bottom: press where it started and carry on.
+            onPhoneTrace?("home indicator: sideways, carried on as a drag")
             homeIndicatorPress = nil
             phoneButtons |= MouseButton.left.hidBit
             link.send(.pointer(pointerReport(at: press.start)))
@@ -504,6 +512,10 @@ public final class InputSession {
 
     private func buttonChanged(_ button: MouseButton, down: Bool) -> Disposition {
         finishStroke()
+        if owner == .phone, let pointer = phonePointer {
+            let at = screenFraction(pointer)
+            onPhoneTrace?("button \(button) \(down ? "down" : "up") at \(Int(at.x * 100))%, \(Int(at.y * 100))% of the screen")
+        }
         if down, owner == .phone, pressesHomeIndicator(button), let pointer = phonePointer {
             buttonHolders[button] = .phone
             homeIndicatorPress = (pointer, false)
@@ -703,6 +715,7 @@ public final class InputSession {
         }
         let report = scroll.convert(input, settings: settings.scroll)
         if !report.isZero { link.send(.scroll(report)) }
+        onScrollTrace?(input, report)
         return .suppress
     }
 

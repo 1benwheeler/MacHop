@@ -271,6 +271,42 @@ case "open-settings":
         print("Settings is open.")
     } catch { fail("\(error)") }
 
+case "wheel-nudge":
+    // Does the wheel need the pointer to move before each scroll? Pointer and wheel only.
+    let app = connectApp()
+    requireReady(app)
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        let result = try lab.wheelNeedsNudge(gestures: option("--gestures", 3))
+        func list(_ values: [Double]) -> String { values.map { String(format: "%.0f", $0) }.joined(separator: ", ") }
+        print("Pointer still: moved \(list(result.still)) pt")
+        print("Nudged first:  moved \(list(result.nudged)) pt")
+    } catch { fail("\(error)") }
+
+case "watch-scroll":
+    // Records how the iPhone's content moves while someone scrolls by hand. Nothing is sent.
+    let app = connectApp()
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        let seconds = Double(option("--seconds", 15))
+        Thread.sleep(forTimeInterval: Double(option("--delay", 0)))
+        print("Recording for \(Int(seconds)) s: scroll now.")
+        let result = try lab.watchScrolling(seconds: seconds)
+        print(result.trace.summary)
+        print("Movement per 100 ms (pt): " + result.slices.map { String(format: "%.0f", $0) }.joined(separator: " "))
+        // Wall-clock time of each frame that moved, to line up with MacHop's log.
+        let startWall = Date().addingTimeInterval(-seconds)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SS"
+        var lastPoints = 0.0
+        var moves: [String] = []
+        for sample in result.trace.samples where abs(sample.points - lastPoints) > 0.5 {
+            moves.append("\(formatter.string(from: startWall.addingTimeInterval(sample.time)))=\(Int(sample.points - lastPoints))")
+            lastPoints = sample.points
+        }
+        print("Moves: " + moves.joined(separator: " "))
+    } catch { fail("\(error)") }
+
 case "wheel-motion":
     // How smoothly the content moves: single steps, steady streams and MacHop's scrolling.
     // Pointer and wheel only, on whatever app is showing; no frames are saved.
