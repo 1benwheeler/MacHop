@@ -173,19 +173,19 @@ struct ScrollConverterTests {
         var converter = ScrollConverter()
         let settings = ScrollSettings(speed: 1)
         var total = 0
-        // 160 points in 1-point events = 10 steps at 16 points per step.
-        for _ in 0..<160 {
+        // 150 points in 1-point events = 5 steps at 30 points per step.
+        for _ in 0..<150 {
             total += converter.convert(ScrollInput(dy: -1, continuous: true, phase: .changed), settings: settings).wheel
         }
-        #expect(total == 10)
+        #expect(total == 5)
     }
 
     @Test("Direction follows the Mac by default and can be reversed")
     func direction() {
         var converter = ScrollConverter()
-        let up = ScrollInput(dy: 32, continuous: true, phase: .changed)
-        #expect(converter.convert(up, settings: ScrollSettings()).wheel == -2)
-        #expect(converter.convert(up, settings: ScrollSettings(reversed: true)).wheel == 2)
+        let up = ScrollInput(dy: 30, continuous: true, phase: .changed)
+        #expect(converter.convert(up, settings: ScrollSettings()).wheel == -1)
+        #expect(converter.convert(up, settings: ScrollSettings(reversed: true)).wheel == 1)
         #expect(converter.convert(ScrollInput(dy: 3, continuous: false), settings: ScrollSettings()).wheel == -3)
     }
 
@@ -193,19 +193,42 @@ struct ScrollConverterTests {
     func reversal() {
         var converter = ScrollConverter()
         let settings = ScrollSettings()
-        _ = converter.convert(ScrollInput(dy: 15, continuous: true, phase: .changed), settings: settings)
-        // Without the reset, 15 points of earlier movement would cancel this.
-        #expect(converter.convert(ScrollInput(dy: -16, continuous: true, phase: .changed), settings: settings).wheel == 1)
+        _ = converter.convert(ScrollInput(dy: 29, continuous: true, phase: .changed), settings: settings)
+        // Without the reset, 29 points of earlier movement would cancel this.
+        #expect(converter.convert(ScrollInput(dy: -30, continuous: true, phase: .changed), settings: settings).wheel == 1)
     }
 
     @Test("Momentum can be turned off, horizontal follows its setting")
     func options() {
         var converter = ScrollConverter()
-        let momentum = ScrollInput(dx: 64, dy: 64, continuous: true, momentum: .changed)
+        let momentum = ScrollInput(dx: 120, dy: 120, continuous: true, momentum: .changed)
         #expect(converter.convert(momentum, settings: ScrollSettings(momentum: false)).isZero)
         let both = converter.convert(momentum, settings: ScrollSettings(horizontal: false))
-        #expect(both.wheel == -4 && both.pan == 0)
-        #expect(converter.convert(momentum, settings: ScrollSettings()).pan == 4)
+        #expect(both.wheel == -1 && both.pan == 0)
+        #expect(converter.convert(momentum, settings: ScrollSettings()).pan == 1)
+    }
+
+    @Test("Momentum passes on a quarter of the glide, so a flick doesn't run away")
+    func momentumShare() {
+        var converter = ScrollConverter()
+        var total = 0
+        // 1,200 points of momentum in 30-point events: a quarter is 300 points, 10 steps.
+        for _ in 0..<40 {
+            total += converter.convert(ScrollInput(dy: -30, continuous: true, momentum: .changed), settings: ScrollSettings()).wheel
+        }
+        #expect(total == 10)
+    }
+
+    @Test("Trackpad scrolling sends one step per event; a burst waits its turn, then the excess is dropped")
+    func oneStepPerEvent() {
+        var converter = ScrollConverter()
+        let settings = ScrollSettings()
+        // One event worth 10 steps: 1 now, 3 carried over the next events, the rest dropped.
+        var steps = [converter.convert(ScrollInput(dy: -300, continuous: true, phase: .changed), settings: settings).wheel]
+        for _ in 0..<6 { steps.append(converter.convert(ScrollInput(dy: 0, continuous: true, phase: .changed), settings: settings).wheel) }
+        #expect(steps == [1, 1, 1, 1, 0, 0, 0])
+        // A mouse wheel's lines aren't limited.
+        #expect(converter.convert(ScrollInput(dy: -5, continuous: false), settings: settings).wheel == 5)
     }
 
     @Test("Absurd input is dropped rather than overflowing")

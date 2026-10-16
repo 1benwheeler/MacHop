@@ -280,6 +280,11 @@ final class AutomationServer {
             }
             return ["ok": true]
 
+        case "reconnect":
+            // The menu's Reconnect: drop the link and connect again (services stay published).
+            model.reconnect()
+            return ["ok": true]
+
         case "sleep", "wake":
             // What MacHop does when the Mac sleeps and wakes, without sleeping it.
             model.simulateSleep(command == "sleep")

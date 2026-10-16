@@ -60,8 +60,15 @@ public struct ScrollSettings: Equatable, Hashable, Sendable, Codable {
 /// fractional remainder is carried between events. A new gesture or a change of
 /// direction drops the remainder so reversing never fights earlier movement.
 public struct ScrollConverter: Sendable {
-    /// Trackpad points per wheel step at speed 1.
-    public static let pointsPerStep: Double = 16
+    /// Trackpad points per wheel step at speed 1: about how far iPhone moves content
+    /// per step (20–35 points, measured in Settings), so the page follows the fingers.
+    public static let pointsPerStep: Double = 30
+    /// The share of the trackpad's momentum (after the fingers lift) passed on: a flick
+    /// coasts a little instead of running to the end of a long page.
+    public static let momentumShare = 0.25
+    /// Trackpad scrolling sends at most one step per event, so iPhone animates a steady
+    /// stream instead of jumping; up to this many steps wait their turn, and more is dropped.
+    public static let carriedSteps = 3.0
 
     private var remainderX = 0.0
     private var remainderY = 0.0
@@ -80,13 +87,15 @@ public struct ScrollConverter: Sendable {
         // iOS treats a positive wheel value as "content moves up", the opposite of the
         // Mac's delta sign, so the default flips the sign to keep both screens alike.
         let sign: Double = settings.reversed ? 1 : -1
-        let scale = settings.speed / (input.continuous ? Self.pointsPerStep : 1)
-        let wheel = Self.steps(input.dy * sign * scale, remainder: &remainderY)
-        let pan = settings.horizontal ? Self.steps(-input.dx * sign * scale, remainder: &remainderX) : 0
+        var scale = settings.speed / (input.continuous ? Self.pointsPerStep : 1)
+        if input.momentum != .none { scale *= Self.momentumShare }
+        let limit = input.continuous ? 1 : nil as Int?
+        let wheel = Self.steps(input.dy * sign * scale, remainder: &remainderY, limit: limit)
+        let pan = settings.horizontal ? Self.steps(-input.dx * sign * scale, remainder: &remainderX, limit: limit) : 0
         return ScrollReport(wheel: wheel, pan: pan)
     }
 
-    private static func steps(_ amount: Double, remainder: inout Double) -> Int {
+    private static func steps(_ amount: Double, remainder: inout Double, limit: Int?) -> Int {
         guard amount.isFinite, abs(amount) < 100_000 else {
             remainder = 0
             return 0
@@ -96,8 +105,10 @@ public struct ScrollConverter: Sendable {
         // Absorb floating-point noise at whole-step boundaries (e.g. 0.9999999).
         let nearest = remainder.rounded()
         if abs(remainder - nearest) < 1e-9 { remainder = nearest }
-        let whole = remainder.rounded(.towardZero)
+        var whole = remainder.rounded(.towardZero)
+        if let limit { whole = max(-Double(limit), min(Double(limit), whole)) }
         remainder -= whole
+        if limit != nil { remainder = max(-carriedSteps, min(carriedSteps, remainder)) }
         return Int(whole)
     }
 }

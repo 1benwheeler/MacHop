@@ -149,6 +149,20 @@ public final class PhoneScreen: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         CGImageDestinationFinalize(destination)
     }
 
+    /// Text on screen with where it is: each box as fractions of the screen, from the top left.
+    public func textBoxes() -> [(text: String, box: CGRect)] {
+        guard let image = image() else { return [] }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        try? VNImageRequestHandler(cgImage: image).perform([request])
+        return (request.results ?? []).compactMap { observation in
+            guard let text = observation.topCandidates(1).first?.string else { return nil }
+            let b = observation.boundingBox
+            return (text, CGRect(x: b.minX, y: 1 - b.maxY, width: b.width, height: b.height))
+        }
+    }
+
     /// Text on screen, recognised with Apple's Vision framework.
     public func recognizedText() -> [String] {
         guard let image = image() else { return [] }

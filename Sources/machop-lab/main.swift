@@ -251,6 +251,42 @@ case "pointer":
         report("Pointer placement", [line])
     } catch { fail("\(error)") }
 
+case "to-settings":
+    // From any app: AssistiveTouch menu → Home, then Spotlight → Settings.
+    let app = connectApp()
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        try lab.backToSettings()
+        print("Settings is open.")
+    } catch { fail("\(error)") }
+
+case "open-settings":
+    // From the Home Screen: taps the Settings icon, if its label is on screen.
+    let app = connectApp()
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        guard try lab.tapIcon("Settings") else { fail("No Settings icon on screen.") }
+        Thread.sleep(forTimeInterval: 2)
+        try lab.requireExpectedScreen()
+        print("Settings is open.")
+    } catch { fail("\(error)") }
+
+case "wheel-trigger":
+    // One trial: fresh connection, wheel, then <navigateInSettings|spotlight|switchApp>, wheel.
+    let app = connectApp()
+    requireReady(app)
+    let lab = Lab(app: app, screen: openScreen())
+    let name = CommandLine.arguments.dropFirst().first { Lab.WheelTrigger(rawValue: $0) != nil } ?? "navigateInSettings"
+    let save = CommandLine.arguments.firstIndex(of: "--save").flatMap { index in
+        index + 1 < CommandLine.arguments.count ? URL(fileURLWithPath: CommandLine.arguments[index + 1]) : nil
+    }
+    do {
+        let result = try lab.wheelTrial(Lab.WheelTrigger(rawValue: name)!, saveTo: save)
+        let line = "Wheel trigger \(name): before \(result.before)/3, after \(result.after)/3"
+        print(line)
+        report("Wheel trigger", [line])
+    } catch { fail("\(error)") }
+
 case "sleep-check":
     // Simulates the Mac sleeping and waking, and watches the iPhone for its pointer.
     let app = connectApp()

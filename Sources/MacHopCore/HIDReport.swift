@@ -108,7 +108,8 @@ public struct ConsumerReport: Equatable, Sendable {
     public init(usage: UInt16 = 0) { self.usage = usage }
 
     public static let released = ConsumerReport()
-    public static let home: UInt16 = 0x0223          // AC Home
+    public static let home: UInt16 = 0x0223          // AC Home (does nothing on iPhone)
+    public static let menu: UInt16 = 0x0040          // Menu: Home on iPhone (Apple's accessory guidelines)
     public static let search: UInt16 = 0x0221        // AC Search (Spotlight)
     public static let keyboardToggle: UInt16 = 0x01AE // AL Keyboard Layout (show/hide keyboard)
 }

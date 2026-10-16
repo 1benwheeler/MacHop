@@ -244,6 +244,7 @@ public final class InputSession {
     public func returnToMac(_ reason: ReturnReason, cursorAt point: Point? = nil) {
         guard owner == .phone else { return }
         finishStroke()
+        homeIndicatorPress = nil
         owner = .mac
         for (code, holder) in keyHolders where holder == .phone { keyHolders[code] = .swallowed }
         for (button, holder) in buttonHolders where holder == .phone { buttonHolders[button] = .swallowed }
@@ -439,6 +440,7 @@ public final class InputSession {
         // Pressure is counted in hand movement (Mac points), so resistance feels the same at any speed.
         if overshoot > 0, !Self.slidesAlongEdge(delta, side: side) { returnPressure += overshoot / max(scale, 0.01) }
         phonePointer = pointer
+        followHomeIndicatorPress(to: pointer)
         let holdingButton = buttonHolders.values.contains(.phone)
         let needed = max(0.5, settings.edgeResistance)
         if overshoot > 0, !holdingButton, returnPressure >= needed {
@@ -457,8 +459,70 @@ public final class InputSession {
         return PointerReport(buttons: buttons ?? phoneButtons, x: screen.x, y: screen.y)
     }
 
+    // MARK: The home indicator
+
+    /// A left press that began on the iPhone's home indicator, held back. With wheel
+    /// scrolling, a pointer drag there would start iOS's Home gesture, and afterwards
+    /// AssistiveTouch ignores the wheel until the iPhone forgets MacHop (measured on an
+    /// iPhone 15 Pro, iOS 26). So dragged up, it becomes the Home key instead; released
+    /// in place, it's an ordinary click; dragged sideways (switching apps), it carries on
+    /// as a real drag.
+    private var homeIndicatorPress: (start: Point, wentHome: Bool)?
+    /// How close to the bottom of the iPhone's screen counts as the home indicator.
+    public static let homeIndicatorZone = 0.035
+    /// How far up (or sideways), as a share of the screen's height, decides the drag.
+    public static let homeSwipeDistance = 0.04
+
+    /// A point on the phone as a fraction of the iPhone's own (upright portrait) screen.
+    private func screenFraction(_ point: Point) -> (x: Double, y: Double) {
+        guard let screenLink else { return (0.5, 0.5) }
+        return settings.layout.screenFraction(x: point.x / max(screenLink.phone.width, 1),
+                                              y: point.y / max(screenLink.phone.height, 1))
+    }
+
+    private func pressesHomeIndicator(_ button: MouseButton) -> Bool {
+        guard settings.scroll.style == .wheel, button == .left, phoneButtons == 0, let pointer = phonePointer else { return false }
+        return screenFraction(pointer).y >= 1 - Self.homeIndicatorZone
+    }
+
+    /// Follows a held-back home-indicator press as the pointer moves.
+    private func followHomeIndicatorPress(to pointer: Point) {
+        guard let press = homeIndicatorPress, !press.wentHome else { return }
+        let start = screenFraction(press.start), now = screenFraction(pointer)
+        if start.y - now.y >= Self.homeSwipeDistance {
+            homeIndicatorPress?.wentHome = true
+            link.send(.consumer(ConsumerReport(usage: ConsumerReport.menu)))
+            let release = { [weak self] in self?.link.send(.consumer(.released)) }
+            if let schedule { schedule(0.06) { release() } } else { release() }
+        } else if abs(now.x - start.x) >= Self.homeSwipeDistance * 1.5 {
+            // Switching apps along the bottom: press where it started and carry on.
+            homeIndicatorPress = nil
+            phoneButtons |= MouseButton.left.hidBit
+            link.send(.pointer(pointerReport(at: press.start)))
+        }
+    }
+
     private func buttonChanged(_ button: MouseButton, down: Bool) -> Disposition {
         finishStroke()
+        if down, owner == .phone, pressesHomeIndicator(button), let pointer = phonePointer {
+            buttonHolders[button] = .phone
+            homeIndicatorPress = (pointer, false)
+            return .suppress
+        }
+        if !down, button == .left, buttonHolders[button] == .phone, let press = homeIndicatorPress {
+            buttonHolders.removeValue(forKey: button)
+            homeIndicatorPress = nil
+            if !press.wentHome {
+                // Released in place: an ordinary click where it was pressed.
+                link.send(.pointer(pointerReport(at: press.start, buttons: phoneButtons | MouseButton.left.hidBit)))
+                let release = { [weak self] in
+                    guard let self else { return }
+                    self.link.send(.pointer(self.pointerReport(at: press.start, buttons: self.phoneButtons)))
+                }
+                if let schedule { schedule(0.05) { release() } } else { release() }
+            }
+            return .suppress
+        }
         if down {
             let holder: Holder = owner == .phone ? .phone : .mac
             buttonHolders[button] = holder

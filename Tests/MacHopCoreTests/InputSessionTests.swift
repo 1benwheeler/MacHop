@@ -244,6 +244,64 @@ struct InputSessionTests {
         #expect(sim.phone.pointer.y < before.y - 20, "left on the Mac is towards the Dynamic Island")
     }
 
+    // MARK: The home indicator, with wheel scrolling
+
+    /// On the iPhone (right of the default display), pointer at the bottom of its screen.
+    private func atHomeIndicator(style: ScrollStyle = .wheel) -> Simulation {
+        let sim = Simulation(settings: SessionSettings(layout: PhoneLayout(displayID: 1), scroll: ScrollSettings(style: style)))
+        #expect(sim.crossToPhone())
+        sim.move(dx: 100, dy: 2000, step: 20)
+        sim.settle()
+        return sim
+    }
+
+    @Test("With wheel scrolling, a swipe up from the home indicator becomes the Home key, not a drag")
+    func homeSwipeBecomesHomeKey() throws {
+        let sim = atHomeIndicator()
+        sim.buttonDown(.left)
+        sim.move(dx: 0, dy: -80, step: 4)
+        sim.buttonUp(.left)
+        sim.settle()
+        #expect(sim.phone.consumerPresses == [ConsumerReport.menu])
+        #expect(sim.phone.drags.isEmpty && sim.phone.clicks.isEmpty, "iOS never sees the drag")
+        #expect(sim.phone.isIdle)
+    }
+
+    @Test("A click on the home indicator is still a click, and sideways is still a drag")
+    func homeIndicatorClicksAndSideways() throws {
+        let click = atHomeIndicator()
+        click.buttonDown(.left)
+        click.buttonUp(.left)
+        click.settle()
+        #expect(click.phone.clicks.count == 1 && click.phone.consumerPresses.isEmpty)
+        #expect(click.phone.clicks.first.map { $0.location.y > 852 * 0.96 } == true)
+        let sideways = atHomeIndicator()
+        sideways.buttonDown(.left)
+        sideways.move(dx: 120, dy: 0, step: 4)
+        sideways.buttonUp(.left)
+        sideways.settle()
+        #expect(!sideways.phone.drags.isEmpty, "switching apps along the bottom still drags")
+        #expect(sideways.phone.consumerPresses.isEmpty)
+        #expect(sideways.phone.isIdle)
+    }
+
+    @Test("Without wheel scrolling the home indicator drags as before; leaving mid-press holds nothing")
+    func homeIndicatorOtherwiseUnchanged() throws {
+        let drag = atHomeIndicator(style: .drag)
+        drag.buttonDown(.left)
+        drag.move(dx: 0, dy: -80, step: 4)
+        drag.buttonUp(.left)
+        drag.settle()
+        #expect(!drag.phone.drags.isEmpty && drag.phone.consumerPresses.isEmpty)
+        let away = atHomeIndicator()
+        away.buttonDown(.left)
+        away.session.returnToMac(.requested)
+        away.buttonUp(.left)
+        away.settle()
+        #expect(away.phone.isIdle && away.phone.clicks.isEmpty && away.phone.consumerPresses.isEmpty)
+        #expect(!away.macEvents.contains { if case .button = $0 { true } else { false } }, "the release stays off the Mac")
+    }
+
     @Test("Moving along the menu bar never crosses onto an iPhone above")
     func slidingAlongMenuBar() throws {
         let sim = phoneAbove()
@@ -465,7 +523,8 @@ struct InputSessionTests {
         #expect(sim.crossToPhone())
         sim.trackpadScroll(dy: -160, steps: 10)
         sim.settle()
-        #expect(sim.phone.scrollSteps.y == 10)
+        // 160 points at 30 points per step.
+        #expect(sim.phone.scrollSteps.y == 5)
         #expect(sim.phone.dragScroll == .zero)
     }
 
