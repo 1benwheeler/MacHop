@@ -16,7 +16,7 @@ Please report issues against the [latest release](https://github.com/1benwheeler
 - **Password fields stay private.** While macOS Secure Input is active (for example, in a password field), MacHop won't send input to the iPhone.
 - **Signed with the hardened runtime,** so other programs can't inject code into MacHop to borrow its permissions.
 - **The developer automation channel is off by default.** When it's on, it accepts only programs signed with the same certificate as MacHop itself.
-- **No third-party code.** MacHop uses only Apple's frameworks.
+- **No third-party libraries.** MacHop is built only on Apple's frameworks and pulls in no outside packages. It does include material adapted from another open-source project, BT Remote: the table describing its Bluetooth keyboard and the layout of its Bluetooth service. That's part of MacHop's own source, credited in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Verifying a download
 

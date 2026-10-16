@@ -159,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         add("Made by Ben Wheeler\n", colour: .labelColor, font: .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium))
         add("1benwheeler.com", link: URL(string: "https://1benwheeler.com/"))
         add("\n\nFree software under the GNU Affero General Public License 3.0. " +
-            "Includes Bluetooth keyboard and pointer work adapted from BT Remote by jqssun (MIT).")
+            "Includes Bluetooth keyboard and pointer work adapted from BT Remote by jqssun (AGPL-3.0).")
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
