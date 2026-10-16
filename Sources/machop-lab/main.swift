@@ -257,7 +257,10 @@ case "sleep-check":
     requireReady(app)
     let lab = Lab(app: app, screen: openScreen())
     do {
-        let seen = try lab.changesAroundSleep()
+        let save = CommandLine.arguments.firstIndex(of: "--save").flatMap { index in
+            index + 1 < CommandLine.arguments.count ? URL(fileURLWithPath: CommandLine.arguments[index + 1]) : nil
+        }
+        let seen = try lab.changesAroundSleep(saveTo: save)
         func describe(_ points: [(Double, Double)]) -> String {
             points.isEmpty ? "nothing" : Set(points.map { String(format: "(%.2f, %.2f)", $0.0, $0.1) }).sorted().joined(separator: " ")
         }

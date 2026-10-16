@@ -42,11 +42,14 @@ extension Lab {
     /// on waking (both simulated). Returns the centres, as fractions of the screen, of
     /// changes seen while disconnected and in the `watch` seconds after it's ready again,
     /// ignoring the status bar. The pointer would show as a change near where it was sent.
-    public func changesAroundSleep(watch: Double = 4) throws -> (asleep: [(Double, Double)], awake: [(Double, Double)]) {
+    /// With `saveTo`, the screen is also saved there before, during and after (PNG files).
+    public func changesAroundSleep(watch: Double = 4, saveTo folder: URL? = nil) throws -> (asleep: [(Double, Double)], awake: [(Double, Double)]) {
         try requireExpectedScreen()
         // Let any earlier pointer fade first (iOS fades it after about 15 s).
         Thread.sleep(forTimeInterval: 18)
         guard let reference = settledFrame(after: 0.2), let size = screen.pixelSize else { return ([], []) }
+        func save(_ name: String) { if let folder { try? screen.savePNG(to: folder.appendingPathComponent("\(name).png")) } }
+        save("1-before")
         func changes(in frame: Frame) -> [(Double, Double)] {
             FrameAnalysis.changedRegions(reference, frame)
                 .filter { $0.area < size.width * size.height / 50 && Double($0.centreY) / Double(size.height) > 0.06 }
@@ -55,6 +58,7 @@ extension Lab {
         try app.send(["cmd": "sleep"])
         Thread.sleep(forTimeInterval: 4)
         let asleep = settledFrame(after: 0.2).map(changes) ?? []
+        save("2-asleep")
         try app.send(["cmd": "wake"])
         guard app.waitUntilReady(timeout: 30) else {
             throw AutomationClient.ClientError.failed("The iPhone didn't reconnect within 30 s of the simulated wake.")
@@ -65,6 +69,7 @@ extension Lab {
             Thread.sleep(forTimeInterval: 0.3)
             if let frame = screen.frame(after: clock - 0.02) { awake += changes(in: frame) }
         }
+        save("3-awake")
         return (asleep, awake)
     }
 
