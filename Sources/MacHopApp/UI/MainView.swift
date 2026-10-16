@@ -342,7 +342,7 @@ private struct GesturesPage: View {
                 }
                 RowDivider()
                 SettingRow(symbol: "checklist", title: "One-time setup on your iPhone",
-                           detail: "Your iPhone needs to learn the three swipes once. The guide walks you through it in about a minute.") {
+                           detail: "Home works straight away. For the App Switcher and Notification Centre, your iPhone needs to learn the swipes once; the guide walks you through it in about a minute.") {
                     Button("Set Up…", action: openSetup)
                 }
             }

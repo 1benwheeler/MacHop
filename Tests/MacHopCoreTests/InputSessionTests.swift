@@ -629,7 +629,7 @@ struct InputSessionTests {
         #expect(sim.macEvents.contains(where: isVolumeUp))
     }
 
-    @Test("Three-finger swipes become iPhone actions: up = Home, up and hold = App Switcher, down = Notification Centre")
+    @Test("Three-finger swipes become iPhone actions: up = Home (the Menu key), up and hold = App Switcher, down = Notification Centre")
     func phoneGestures() {
         var actions: [InputSession.PhoneAction] = []
         sim.session.onPhoneAction = { actions.append($0) }
@@ -642,7 +642,10 @@ struct InputSessionTests {
         sim.dockSwipe(.vertical, to: -0.05)        // too small to count
         sim.settle()
         #expect(actions == [.home, .appSwitcher, .notificationCentre])
-        #expect(sim.phone.clicks.map(\.button) == [4, 5, 6], "pointer buttons pressed on the phone")
+        // Home is the Menu key (no setup); the others press pointer buttons 5 and 6.
+        #expect(sim.phone.consumerPresses == [ConsumerReport.menu])
+        #expect(sim.phone.consumerUsage == 0, "the Menu key is released")
+        #expect(sim.phone.clicks.map(\.button) == [5, 6], "pointer buttons pressed on the phone")
         #expect(sim.phone.buttons.isEmpty, "every button released")
         #expect(sim.macEvents.count == macEvents, "none of it reached the Mac (no Mission Control)")
     }

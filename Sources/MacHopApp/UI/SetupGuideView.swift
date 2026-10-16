@@ -54,7 +54,9 @@ struct SetupGuideView: View {
         }
         .onChange(of: model.lastPhoneAction?.time) { _, _ in
             if let sent = model.lastPhoneAction, sent.time >= gestureStart { gesturesSent.insert(sent.action) }
-            if gesturesSent.count == 3, model.settings.gestureSetup == nil { model.update { $0.gestureSetup = .done } }
+            if gesturesSent.isSuperset(of: [.appSwitcher, .notificationCentre]), model.settings.gestureSetup == nil {
+                model.update { $0.gestureSetup = .done }
+            }
         }
     }
 
@@ -202,7 +204,7 @@ struct SetupGuideView: View {
         case .phone: model.settings.phoneID != nil && model.phoneReady
         case .assistiveTouch: assistiveTouchOn || model.settings.hasCrossed == true
         case .tryIt: model.settings.hasCrossed == true
-        case .gestures: model.settings.gestureSetup != nil || gesturesSent.count == 3
+        case .gestures: model.settings.gestureSetup != nil || gesturesSent.isSuperset(of: [.appSwitcher, .notificationCentre])
         }
     }
 
@@ -244,7 +246,7 @@ struct SetupGuideView: View {
         case .phone where done: "Connected to \(model.phoneName)"
         case .gestures where model.settings.gestureSetup == .skipped: "Skipped"
         case .gestures where done: "Home, App Switcher and Notification Centre"
-        case .gestures: "Swipe up for Home, like on an iPad"
+        case .gestures: "App Switcher and Notification Centre, like on an iPad"
         default: nil
         }
     }
@@ -300,16 +302,15 @@ struct SetupGuideView: View {
     }
 
     @ViewBuilder private var gesturesDetail: some View {
-        explain("Swipe with three fingers on your iPhone, as on an iPad: up for Home, up and hold for the App Switcher, down for Notification Centre. Your iPhone needs to learn them once, which takes about a minute.")
+        explain("Swipe with three fingers on your iPhone, as on an iPad. Swiping up for Home already works. For the App Switcher (up and hold) and Notification Centre (down), your iPhone needs to learn the swipes once, which takes about a minute.")
         explain(model.owner == .phone ? "On your iPhone, open:" : "Move onto your iPhone, then on your iPhone open:")
         // Screenshots show a generic name, not this Mac's.
         let macName = model.demo ? "MacBook Pro" : Self.macName
         SettingsPath(parts: ["Settings", "Accessibility", "Touch", "AssistiveTouch", "Devices", macName,
                              "Customise Additional Buttons"])
         VStack(alignment: .leading, spacing: 8) {
-            gestureStep(.home, "Swipe up with three fingers, then choose **Home**.")
-            gestureStep(.appSwitcher, "Tap Customise Additional Buttons again. Swipe up and pause before lifting, then choose **App Switcher**.")
-            gestureStep(.notificationCentre, "Once more, swipe down, then choose **Notification Centre**.")
+            gestureStep(.appSwitcher, "Swipe up with three fingers and pause before lifting, then choose **App Switcher**.")
+            gestureStep(.notificationCentre, "Tap Customise Additional Buttons again. Swipe down, then choose **Notification Centre**.")
         }
         HStack {
             if model.settings.gestureSetup == nil {

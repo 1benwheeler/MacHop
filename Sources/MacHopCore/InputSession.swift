@@ -504,9 +504,7 @@ public final class InputSession {
         if start.y - now.y >= Self.homeSwipeDistance {
             homeIndicatorPress?.wentHome = true
             onPhoneTrace?("home indicator swipe: sent the Home key")
-            link.send(.consumer(ConsumerReport(usage: ConsumerReport.menu)))
-            let release = { [weak self] in self?.link.send(.consumer(.released)) }
-            if let schedule { schedule(0.06) { release() } } else { release() }
+            pressHomeKey()
         } else if abs(now.x - start.x) >= Self.homeSwipeDistance * 1.5 {
             // Switching apps along the bottom: press where it started and carry on.
             onPhoneTrace?("home indicator: sideways, carried on as a drag")
@@ -781,6 +779,8 @@ public final class InputSession {
 
     /// The pointer buttons that gestures press. Assign them in iPhone Settings →
     /// Accessibility → Touch → AssistiveTouch → Devices.
+    /// Home is the Menu key, which iPhone treats as its Home button (no setup). The
+    /// others press extra pointer buttons that the user assigns once in AssistiveTouch.
     public enum PhoneAction: Int, Sendable {
         case home = 4, appSwitcher = 5, notificationCentre = 6
     }
@@ -811,11 +811,19 @@ public final class InputSession {
                   abs(current.peak) >= Self.swipeThreshold else { return }
             let held = clock() - current.lastGrowth >= Self.holdDuration
             let action: PhoneAction = current.peak > 0 ? .notificationCentre : held ? .appSwitcher : .home
-            pressPhoneButton(action.rawValue)
+            if action == .home { pressHomeKey() } else { pressPhoneButton(action.rawValue) }
             onPhoneAction?(action)
         case .cancelled, .none:
             phoneSwipe = nil
         }
+    }
+
+    /// Home on iPhone: a press of the Menu key (Apple's accessory guidelines list it as the
+    /// Home button; confirmed on an iPhone 15 Pro with iOS 26).
+    private func pressHomeKey() {
+        link.send(.consumer(ConsumerReport(usage: ConsumerReport.menu)))
+        let release = { [weak self] in self?.link.send(.consumer(.released)) }
+        if let schedule { schedule(0.06) { release() } } else { release() }
     }
 
     /// Clicks pointer button `number` (1-based) on the phone, where the pointer is.

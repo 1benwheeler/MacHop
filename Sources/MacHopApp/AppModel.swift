@@ -134,7 +134,8 @@ final class AppModel {
         let scheduler = self.scheduler
         session.schedule = { delay, action in scheduler.after(delay, action) }
         session.onPhoneAction = { [weak self] action in
-            Log.input.notice("iPhone gesture: \(String(describing: action), privacy: .public) (button \(action.rawValue))")
+            let sent = action == .home ? "Menu key" : "button \(action.rawValue)"
+            Log.input.notice("iPhone gesture: \(String(describing: action), privacy: .public) (\(sent, privacy: .public))")
             self?.lastPhoneAction = (action, ProcessInfo.processInfo.systemUptime)
         }
         session.entryGuard = {
