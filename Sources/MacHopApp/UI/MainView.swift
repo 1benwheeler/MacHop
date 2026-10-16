@@ -375,11 +375,11 @@ private struct ScrollingPage: View {
         PageFrame(overline: "Trackpad", title: "Scrolling",
                   subtitle: "iPhone can't scroll quite like a Mac, so choose how two-finger scrolling works on it.") {
             Panel {
-                choice(.wheel, symbol: "computermouse", title: "Scroll wheel",
-                       detail: "The pointer stays still while the page moves, in small steps. Swiping up from the bottom of the iPhone goes straight Home.")
-                RowDivider()
                 choice(.drag, symbol: "hand.point.up.left.and.text", title: "Drag",
                        detail: "Smooth, like a finger, but the pointer moves with the page.")
+                RowDivider()
+                choice(.wheel, symbol: "computermouse", title: "Scroll wheel",
+                       detail: "The pointer stays still while the page moves, in small steps. Swiping up from the bottom of the iPhone goes straight Home.")
                 RowDivider()
                 choice(.off, symbol: "nosign", title: "Off",
                        detail: "Two-finger scrolling does nothing on the iPhone. Scroll by holding the button and dragging.")
