@@ -293,3 +293,98 @@ extension Lab {
         return (before, after)
     }
 }
+
+/// How smoothly content moves under wheel scrolling: every captured frame is kept while
+/// it runs, then the movement between consecutive frames is measured. Only the pointer
+/// and the wheel (or MacHop's own scrolling) are used; no frames are saved.
+extension Lab {
+    public struct MotionTrace {
+        /// Seconds since the input started, and the content's movement since then (points).
+        public var samples: [(time: Double, points: Double)]
+        public var summary: String {
+            guard let last = samples.last else { return "no frames" }
+            let pairs = Array(zip(samples.dropFirst(), samples))
+            let steps = pairs.map { abs($0.0.points - $0.1.points) }
+            let moving = steps.filter { $0 > 0.5 }
+            let first = samples.first { abs($0.points) > 0.5 }?.time
+            let lastMove = pairs.last { abs($0.0.points - $0.1.points) > 0.5 }?.0.time
+            let span = (lastMove ?? 0) - (first ?? 0)
+            let stalls = pairs
+                .filter { $0.0.time > (first ?? .infinity) && $0.0.time < (lastMove ?? 0) && abs($0.0.points - $0.1.points) <= 0.5 }.count
+            return String(format: "moved %.0f pt over %.2f s in %d frames; per-frame %.1f–%.1f pt; %d still frames mid-scroll",
+                          abs(last.points), span, steps.count, moving.min() ?? 0, moving.max() ?? 0, stalls)
+        }
+    }
+
+    /// Runs `input`, recording frames for `duration` seconds from its start.
+    func trace(duration: Double, _ input: @escaping () throws -> Void) throws -> MotionTrace {
+        var frames: [Frame] = []
+        let start = uptime
+        let worker = Thread { try? input() }
+        worker.start()
+        var last = start - 0.001
+        while uptime - start < duration {
+            if let frame = screen.frame(after: last, timeout: 0.2), frame.time > last {
+                frames.append(frame)
+                last = frame.time
+            }
+        }
+        guard let size = screen.pixelSize, var previous = frames.first else { return MotionTrace(samples: []) }
+        // Captured pixels per point (iPhone 15 Pro: 3).
+        let pixelsPerPoint = Double(size.width) / 393.0
+        var position = 0.0
+        var samples: [(Double, Double)] = [(previous.time - start, 0)]
+        for frame in frames.dropFirst() {
+            let shift = FrameAnalysis.verticalShift(from: previous, to: frame, maxShift: Int(Double(size.height) * 0.3))
+            if shift.moved { position += Double(shift.pixels) / pixelsPerPoint }
+            samples.append((frame.time - start, position))
+            previous = frame
+        }
+        return MotionTrace(samples: samples)
+    }
+
+    /// Single steps, steady streams and MacHop's own long scroll, on whatever is showing.
+    public func wheelMotion() throws -> [(String, MotionTrace)] {
+        var results: [(String, MotionTrace)] = []
+        try app.send(["cmd": "hid.pointer", "x": 0.5, "y": 0.55])
+        rest(1)
+        results.append(("1 step", try trace(duration: 0.8) {
+            try self.app.send(["cmd": "hid.scroll", "wheel": -1])
+        }))
+        rest(1)
+        for (interval, count, direction) in [(0.05, 20, 1), (0.025, 40, -1)] {
+            results.append(("\(count) steps every \(Int(interval * 1000)) ms", try trace(duration: Double(count) * interval + 0.8) {
+                for _ in 0..<count {
+                    try self.app.send(["cmd": "hid.scroll", "wheel": direction])
+                    Thread.sleep(forTimeInterval: interval)
+                }
+            }))
+            rest(1)
+        }
+        // MacHop's own path: a long two-finger scroll with momentum, as the trackpad sends it.
+        try app.send(["cmd": "enter"])
+        // Well inside the iPhone, so a stray movement can't cross straight back.
+        if let edge = LabEdge(status: try app.status()) {
+            let deeper = edge.delta(outward: 20)
+            for _ in 0..<8 { try app.send(["cmd": "move", "dx": deeper.dx, "dy": deeper.dy]); rest(0.01) }
+        }
+        rest(0.5)
+        results.append(("MacHop two-finger scroll", try trace(duration: 2.5) {
+            try self.app.send(["cmd": "scroll", "dy": 0, "phase": "mayBegin"])
+            for index in 0..<40 {
+                try self.app.send(["cmd": "scroll", "dy": 12, "phase": index == 0 ? "began" : "changed"])
+                Thread.sleep(forTimeInterval: 0.016)
+            }
+            try self.app.send(["cmd": "scroll", "dy": 0, "phase": "ended"])
+            var speed = 12.0
+            for index in 0..<40 {
+                try self.app.send(["cmd": "scroll", "dy": speed, "momentum": index == 0 ? "began" : "changed"])
+                speed *= 0.93
+                Thread.sleep(forTimeInterval: 0.016)
+            }
+            try self.app.send(["cmd": "scroll", "dy": 0, "momentum": "ended"])
+        }))
+        try app.send(["cmd": "return"])
+        return results
+    }
+}

@@ -271,6 +271,18 @@ case "open-settings":
         print("Settings is open.")
     } catch { fail("\(error)") }
 
+case "wheel-motion":
+    // How smoothly the content moves: single steps, steady streams and MacHop's scrolling.
+    // Pointer and wheel only, on whatever app is showing; no frames are saved.
+    let app = connectApp()
+    requireReady(app)
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        let lines = try lab.wheelMotion().map { "\($0.0): \($0.1.summary)" }
+        lines.forEach { print($0) }
+        report("Wheel motion", lines)
+    } catch { fail("\(error)") }
+
 case "wheel-trigger":
     // One trial: fresh connection, wheel, then <navigateInSettings|spotlight|switchApp>, wheel.
     let app = connectApp()

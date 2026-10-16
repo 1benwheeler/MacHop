@@ -370,18 +370,20 @@ private struct ScrollingPage: View {
     let model: AppModel
 
     var body: some View {
-        let on = model.settings.session.scroll.style != .off
+        let style = model.settings.session.scroll.style
         PageFrame(overline: "Trackpad", title: "Scrolling",
-                  subtitle: "iPhone can't scroll with the pointer standing still, so two-finger scrolling works like holding the button and dragging, with iPhone's own momentum.") {
+                  subtitle: "iPhone can't scroll quite like a Mac, so choose how two-finger scrolling works on it.") {
             Panel {
-                SettingRow(symbol: "hand.point.up.left.and.text", title: "Two-finger scrolling",
-                           detail: on ? "The pointer moves with the content." : "Off: scroll by holding the button and dragging.") {
-                    Toggle("Two-finger scrolling", isOn: Binding(
-                        get: { on },
-                        set: { value in model.update { $0.session.scroll.style = value ? .drag : .off } }))
-                    .toggleStyle(.switch).labelsHidden()
-                }
+                choice(.wheel, symbol: "computermouse", title: "Scroll wheel",
+                       detail: "The pointer stays still while the page moves, in small steps. Swiping up from the bottom of the iPhone goes straight Home.")
                 RowDivider()
+                choice(.drag, symbol: "hand.point.up.left.and.text", title: "Drag",
+                       detail: "Smooth, like a finger, but the pointer moves with the page.")
+                RowDivider()
+                choice(.off, symbol: "nosign", title: "Off",
+                       detail: "Two-finger scrolling does nothing on the iPhone. Scroll by holding the button and dragging.")
+            }
+            Panel {
                 Group {
                     SettingRow(symbol: "speedometer", title: "Speed") {
                         SpeedSlider(speed: model.binding(\.session.scroll.speed), range: 0.25...4)
@@ -391,15 +393,34 @@ private struct ScrollingPage: View {
                     SettingRow(symbol: "arrow.up.arrow.down", title: "Reverse direction on iPhone") {
                         Toggle("Reverse", isOn: model.binding(\.session.scroll.reversed)).toggleStyle(.switch).labelsHidden()
                     }
-                    RowDivider()
-                    SettingRow(symbol: "arrow.left.and.right", title: "Horizontal scrolling") {
-                        Toggle("Horizontal", isOn: model.binding(\.session.scroll.horizontal)).toggleStyle(.switch).labelsHidden()
+                    if style == .drag {
+                        RowDivider()
+                        SettingRow(symbol: "arrow.left.and.right", title: "Horizontal scrolling") {
+                            Toggle("Horizontal", isOn: model.binding(\.session.scroll.horizontal)).toggleStyle(.switch).labelsHidden()
+                        }
                     }
                 }
-                .disabled(!on)
-                .opacity(on ? 1 : 0.5)
+                .disabled(style == .off)
+                .opacity(style == .off ? 0.5 : 1)
             }
         }
+    }
+
+    /// One way of scrolling, chosen by clicking anywhere on its row.
+    private func choice(_ value: ScrollStyle, symbol: String, title: String, detail: String) -> some View {
+        let selected = model.settings.session.scroll.style == value
+        return Button {
+            model.update { $0.session.scroll.style = value }
+        } label: {
+            SettingRow(symbol: symbol, title: title, detail: detail) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }
 

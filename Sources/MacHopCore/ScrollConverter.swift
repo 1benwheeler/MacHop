@@ -4,8 +4,9 @@ public enum ScrollStyle: String, Equatable, Hashable, Sendable, Codable, CaseIte
     /// Press and drag at the pointer, like a finger. Reliable on iPhone; the
     /// AssistiveTouch pointer moves with the content while scrolling.
     case drag
-    /// Mouse-wheel reports. The pointer stays still, but iOS AssistiveTouch
-    /// applies them only intermittently (kept for the test lab).
+    /// Mouse-wheel reports: the pointer stays still and iPhone moves the page in steps
+    /// (it jumps per step rather than gliding). A pointer swipe up from the bottom edge
+    /// would stop iPhone acting on the wheel, so in this mode that swipe becomes Home.
     case wheel
     /// Two-finger scrolling does nothing on the phone (and never reaches the Mac).
     case off
