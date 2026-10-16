@@ -271,6 +271,71 @@ case "open-settings":
         print("Settings is open.")
     } catch { fail("\(error)") }
 
+case "drag-list":
+    // Settings only: drags the list one step (down shows later rows), stopping dead.
+    let app = connectApp()
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        try lab.requireExpectedScreen()
+        try lab.dragList(down: !CommandLine.arguments.contains("up"))
+        print("dragged")
+    } catch { fail("\(error)") }
+
+case "tap-label":
+    // Settings only: prints where a label is and taps the middle of its row.
+    let app = connectApp()
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        try lab.requireExpectedScreen()
+        let label = CommandLine.arguments.last ?? ""
+        let boxes = lab.screen.textBoxes().filter { $0.text.trimmingCharacters(in: .whitespaces) == label }
+        print("found \(boxes.count): " + boxes.map { String(format: "(%.2f, %.2f) %.2f×%.2f", $0.box.midX, $0.box.midY, $0.box.width, $0.box.height) }.joined(separator: " "))
+        if let box = boxes.first, CommandLine.arguments.contains("--tap") { try lab.tapRow(atY: box.box.midY); print("tapped") }
+    } catch { fail("\(error)") }
+
+case "at-actions":
+    // Lists the actions AssistiveTouch offers for a spare pointer button, without assigning one.
+    let app = connectApp()
+    requireReady(app)
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        let mac = CommandLine.arguments.firstIndex(of: "--mac").flatMap { $0 + 1 < CommandLine.arguments.count ? CommandLine.arguments[$0 + 1] : nil } ?? "MacBook"
+        let actions = try lab.assistiveTouchActions(macName: mac)
+        print(actions.joined(separator: " | "))
+    } catch { fail("\(error)") }
+
+case "chained-drags":
+    // Short drags in a row with the pointer hopping back: smoothness of the content. Settings only.
+    let app = connectApp()
+    requireReady(app)
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        for glide in [false, true] {
+            let result = try lab.chainedDrags(glide: glide)
+            print("chained drags \(glide ? "with" : "without") glide: \(result)")
+            Thread.sleep(forTimeInterval: 1.5)
+        }
+        // For comparison: one ordinary drag of the same total distance.
+        let single = try lab.chainedDrags(strokes: 1, distance: 0.3, glide: true)
+        print("one long drag: \(single)")
+    } catch { fail("\(error)") }
+
+case "scroll-options":
+    // Smoothness of wheel scrolling per report layout, and of keyboard scrolling. Settings only.
+    let app = connectApp()
+    requireReady(app)
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        var lines: [String] = []
+        let profiles = CommandLine.arguments.contains("--keys-only") ? [] : ["compatibility", "standard", "relative"]
+        for profile in profiles {
+            for (name, result) in try lab.scrollOptions(profile: profile) { lines.append("\(name): \(result)"); print(lines.last!) }
+        }
+        try lab.switchProfile("compatibility")
+        for (name, result) in try lab.keyboardScrolling() { lines.append("keyboard \(name): \(result)"); print(lines.last!) }
+        report("Scroll options", lines)
+    } catch { fail("\(error)") }
+
 case "wheel-nudge":
     // Does the wheel need the pointer to move before each scroll? Pointer and wheel only.
     let app = connectApp()

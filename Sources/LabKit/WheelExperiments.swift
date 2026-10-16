@@ -45,7 +45,8 @@ extension Lab {
         try app.send(["cmd": "hid.consumer", "usage": 0])
     }
 
-    func drag(from start: (Double, Double), to end: (Double, Double), steps: Int = 12) throws {
+    /// With `fling` false it holds still before letting go, so the list stops where it is.
+    func drag(from start: (Double, Double), to end: (Double, Double), steps: Int = 12, fling: Bool = true) throws {
         try app.send(["cmd": "hid.pointer", "x": start.0, "y": start.1])
         rest(0.3)
         try app.send(["cmd": "hid.pointer", "x": start.0, "y": start.1, "buttons": 1])
@@ -54,6 +55,7 @@ extension Lab {
             try app.send(["cmd": "hid.pointer", "x": start.0 + (end.0 - start.0) * t, "y": start.1 + (end.1 - start.1) * t, "buttons": 1])
             rest(0.016)
         }
+        if !fling { rest(0.25) }
         try app.send(["cmd": "hid.pointer", "x": end.0, "y": end.1, "buttons": 0])
     }
 
@@ -434,5 +436,147 @@ extension Lab {
         for index in 0..<gestures { still.append(try gesture(nudge: false, direction: index % 2 == 0 ? 1 : -1)) }
         for index in 0..<gestures { nudged.append(try gesture(nudge: true, direction: index % 2 == 0 ? 1 : -1)) }
         return (still, nudged)
+    }
+}
+
+extension Lab {
+    /// Per-frame movement statistics while content moves (points).
+    public struct Smoothness: CustomStringConvertible {
+        public var total: Double, perStep: Double?, biggestFrame: Double, typicalFrame: Double, stillShare: Double
+        public var description: String {
+            String(format: "moved %.0f pt%@; biggest single-frame jump %.0f pt, typical %.0f pt; %.0f%% of frames still while moving",
+                   total, perStep.map { String(format: " (%.0f pt per step)", $0) } ?? "", biggestFrame, typicalFrame, stillShare * 100)
+        }
+    }
+
+    func smoothness(_ trace: MotionTrace, steps: Int?) -> Smoothness {
+        let pairs = Array(zip(trace.samples.dropFirst(), trace.samples))
+        let deltas = pairs.map { abs($0.0.points - $0.1.points) }
+        guard let first = deltas.firstIndex(where: { $0 > 0.5 }), let last = deltas.lastIndex(where: { $0 > 0.5 }) else {
+            return Smoothness(total: 0, perStep: nil, biggestFrame: 0, typicalFrame: 0, stillShare: 0)
+        }
+        let window = Array(deltas[first...last])
+        let moving = window.filter { $0 > 0.5 }.sorted()
+        let total = abs(trace.samples.last?.points ?? 0)
+        return Smoothness(total: total, perStep: steps.map { total / Double($0) }, biggestFrame: moving.last ?? 0,
+                          typicalFrame: moving[moving.count / 2], stillShare: Double(window.count - moving.count) / Double(window.count))
+    }
+
+    /// Wheel steps and keyboard keys, each measured for smoothness, on the current profile.
+    /// Pointer, wheel and navigation keys only (Settings must be showing).
+    public func scrollOptions(profile: String) throws -> [(String, Smoothness)] {
+        try requireExpectedScreen()
+        try switchProfile(profile)
+        try app.send(["cmd": "hid.pointer", "x": 0.5, "y": 0.55])
+        rest(1)
+        var results: [(String, Smoothness)] = []
+        let wheel = try trace(duration: 1.6) {
+            for _ in 0..<12 { try self.app.send(["cmd": "hid.scroll", "wheel": -1]); Thread.sleep(forTimeInterval: 0.05) }
+        }
+        results.append(("\(profile) wheel, 12 steps", smoothness(wheel, steps: 12)))
+        rest(1)
+        let back = try trace(duration: 1.6) {
+            for _ in 0..<12 { try self.app.send(["cmd": "hid.scroll", "wheel": 1]); Thread.sleep(forTimeInterval: 0.05) }
+        }
+        results.append(("\(profile) wheel back, 12 steps", smoothness(back, steps: 12)))
+        return results
+    }
+
+    /// Keyboard scrolling in Settings: the down arrow held, Page Down, then back up.
+    public func keyboardScrolling() throws -> [(String, Smoothness)] {
+        try requireExpectedScreen()
+        var results: [(String, Smoothness)] = []
+        func press(_ usage: Int, hold: Double) throws {
+            try app.send(["cmd": "hid.keyboard", "modifiers": 0, "keys": [usage]])
+            Thread.sleep(forTimeInterval: hold)
+            try app.send(["cmd": "hid.keyboard", "modifiers": 0, "keys": [Int]()])
+        }
+        results.append(("down arrow held 1 s", smoothness(try trace(duration: 2) { try press(0x51, hold: 1.0) }, steps: nil)))
+        rest(1)
+        results.append(("up arrow held 1 s", smoothness(try trace(duration: 2) { try press(0x52, hold: 1.0) }, steps: nil)))
+        rest(1)
+        results.append(("Page Down", smoothness(try trace(duration: 1.5) { try press(0x4E, hold: 0.08) }, steps: nil)))
+        rest(1)
+        results.append(("Page Up", smoothness(try trace(duration: 1.5) { try press(0x4B, hold: 0.08) }, steps: nil)))
+        return results
+    }
+}
+
+extension Lab {
+    /// Short chained drags, the pointer hopping back to the start after each: how smoothly
+    /// does the content move? Settings only (each press lands on a list row, briefly).
+    public func chainedDrags(strokes: Int = 10, distance: Double = 0.03, glide: Bool) throws -> Smoothness {
+        try requireExpectedScreen()
+        let x = 0.5, start = 0.62
+        try app.send(["cmd": "hid.pointer", "x": x, "y": start])
+        rest(0.8)
+        let trace = try trace(duration: Double(strokes) * 0.16 + 1.5) {
+            for _ in 0..<strokes {
+                try self.app.send(["cmd": "hid.pointer", "x": x, "y": start, "buttons": 1])
+                for step in 1...6 {
+                    try self.app.send(["cmd": "hid.pointer", "x": x, "y": start - distance * Double(step) / 6, "buttons": 1])
+                    Thread.sleep(forTimeInterval: 0.016)
+                }
+                // Without glide, rest before letting go so iOS adds no momentum.
+                if !glide { Thread.sleep(forTimeInterval: 0.06) }
+                try self.app.send(["cmd": "hid.pointer", "x": x, "y": start - distance, "buttons": 0])
+                try self.app.send(["cmd": "hid.pointer", "x": x, "y": start])
+                Thread.sleep(forTimeInterval: 0.03)
+            }
+        }
+        return smoothness(trace, steps: nil)
+    }
+}
+
+extension Lab {
+    /// Clicks the Settings row labelled `label`, dragging the list to reveal it if needed:
+    /// first towards the end, then back towards the top.
+    func openRow(_ label: String, contains: Bool = false) throws {
+        for attempt in 0..<16 {
+            let match = screen.textBoxes().first { box in
+                let text = box.text.trimmingCharacters(in: .whitespaces)
+                return contains ? text.contains(label) : text == label
+            }
+            if let match, match.box.midY > 0.12, match.box.midY < 0.9 {
+                try click(atX: 0.5, y: match.box.midY)
+                rest(1.5)
+                return
+            }
+            try dragList(down: attempt < 5)
+            rest(0.8)
+        }
+        throw AutomationClient.ClientError.failed("Couldn't find \(label) in Settings; stopped.")
+    }
+
+    /// Settings → Accessibility → Touch → AssistiveTouch → Devices → this Mac → Customise
+    /// Additional Buttons, then presses spare button `number` so iOS lists the actions it
+    /// can have, reads them, and cancels without choosing. Settings only.
+    public func assistiveTouchActions(macName: String, button number: Int = 7) throws -> [String] {
+        try requireExpectedScreen()
+        for row in ["Accessibility", "Touch", "AssistiveTouch", "Devices"] { try openRow(row) }
+        try openRow(macName, contains: true)
+        try openRow("Customise Additional Buttons", contains: true)
+        rest(1)
+        // iOS asks for a button press; press the spare button once.
+        let bit = 1 << (number - 1)
+        try app.send(["cmd": "hid.pointer", "x": 0.5, "y": 0.5, "buttons": bit])
+        rest(0.1)
+        try app.send(["cmd": "hid.pointer", "x": 0.5, "y": 0.5, "buttons": 0])
+        rest(2)
+        var seen: [String] = []
+        for _ in 0..<6 {
+            for text in screen.recognizedText() where !seen.contains(text) { seen.append(text) }
+            try dragList(down: true)
+            rest(0.8)
+        }
+        if let cancel = find("Cancel") { try click(atX: cancel.x, y: cancel.y) }
+        return seen
+    }
+}
+
+extension Lab {
+    public func tapRow(atY y: Double) throws { try click(atX: 0.5, y: y) }
+    public func dragList(down: Bool) throws {
+        try drag(from: (0.5, down ? 0.82 : 0.2), to: (0.5, down ? 0.2 : 0.82), steps: 30, fling: false)
     }
 }

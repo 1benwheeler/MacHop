@@ -376,7 +376,7 @@ public final class Lab {
         try app.send(["cmd": "move", "dx": (0.5 - px) * width, "dy": (y - py) * height])
     }
 
-    func switchProfile(_ profile: String) throws {
+    public func switchProfile(_ profile: String) throws {
         let current = try app.status()["profile"] as? String
         guard current != profile else { return }
         log("  switching HID profile to \(profile); waiting for the iPhone to re-subscribe…")
