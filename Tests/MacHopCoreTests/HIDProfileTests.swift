@@ -24,11 +24,23 @@ struct HIDProfileTests {
         #expect(digest == "8f4557d101358796c23cd59cb5d7606135be48c7c3711e0758b4e41890ae6989")
     }
 
+    @Test("The high-resolution wheel experiment announces a Resolution Multiplier beside the wheel")
+    func hiResWheelMap() throws {
+        let profile = HIDProfile(.hiResWheel)
+        let descriptor = try HIDDescriptor(bytes: profile.reportMap)
+        let feature = try #require(descriptor.reports.first { $0.kind == .feature && $0.reportID == 7 })
+        #expect(feature.fields.contains { $0.size == 2 && ($0.usages.contains(0x48) || $0.usages.contains(0x0001_0048)) })
+        #expect(feature.byteLength == 1)
+        #expect(descriptor.input(7) != nil, "the wheel itself is unchanged")
+        #expect(profile.featureReports == [7: [0]])
+        #expect(HIDProfile(.compatibility).featureReports.isEmpty)
+    }
+
     @Test("Every report map parses, and MacHop's own maps are spec-clean", arguments: allProfiles)
     func reportMapsParse(profile: HIDProfile) throws {
         let descriptor = try HIDDescriptor(bytes: profile.reportMap)
-        if profile.variant == .compatibility {
-            // The proven layout encodes some logical maxima in one signed byte (e.g. 0xDD).
+        if profile.base == .compatibility {
+            // The proven layout (and the experiment built on it) encodes some logical maxima in one signed byte (e.g. 0xDD).
             // iOS accepts it; the parser records it so the quirk stays visible.
             #expect(!descriptor.warnings.isEmpty)
         } else {

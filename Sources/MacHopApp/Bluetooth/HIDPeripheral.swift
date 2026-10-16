@@ -46,6 +46,9 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
     private var values: [ObjectIdentifier: Data] = [:]
     /// Characteristics the phone may write (Protocol Mode, LED outputs).
     private var writable: Set<ObjectIdentifier> = []
+    /// Feature report characteristics, by report ID (for logging what the host sets).
+    private var featureIDs: [ObjectIdentifier: UInt8] = [:]
+    private weak var reportMap: CBMutableCharacteristic?
     private var controlPoint: CBMutableCharacteristic?
     private var retryDelay = 1.0
 
@@ -122,11 +125,12 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
         reportIDs.removeAll()
         values.removeAll()
         writable.removeAll()
+        featureIDs.removeAll()
 
         let battery = CBMutableService(type: Self.uuid("180F"), primary: true)
         let level = CBMutableCharacteristic(type: Self.uuid("2A19"), properties: [.read, .notifyEncryptionRequired],
                                             value: nil, permissions: .readEncryptionRequired)
-        if profile.variant == .compatibility {
+        if profile.base == .compatibility {
             // The proven map carries a battery report (ID 4) that references this characteristic.
             level.descriptors = [CBMutableDescriptor(type: Self.uuid("2908"), value: Data([4, 1]))]
         }
@@ -166,8 +170,11 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
                                                  value: nil, permissions: [.readEncryptionRequired, .writeEncryptionRequired])
         values[ObjectIdentifier(bootOutput)] = Data([0])
         writable.insert(ObjectIdentifier(bootOutput))
+        // Served on request (not as a fixed value) so MacHop can log when the iPhone reads it.
         let map = CBMutableCharacteristic(type: Self.uuid("2A4B"), properties: .read,
-                                          value: Data(profile.reportMap), permissions: .readEncryptionRequired)
+                                          value: nil, permissions: .readEncryptionRequired)
+        values[ObjectIdentifier(map)] = Data(profile.reportMap)
+        reportMap = map
         // External Report Reference: the map may refer to the Battery Level characteristic.
         map.descriptors = [CBMutableDescriptor(type: Self.uuid("2907"), value: Data([0x19, 0x2A]))]
 
@@ -186,6 +193,16 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
             reports.append(report)
             // The proven layout publishes the LED output right after the keyboard input.
             if id == profile.keyboardReportID { reports.append(leds) }
+        }
+        // Feature reports (the experimental high-resolution wheel's multiplier).
+        for (id, initial) in profile.featureReports.sorted(by: { $0.key < $1.key }) {
+            let feature = CBMutableCharacteristic(type: Self.uuid("2A4D"), properties: [.read, .write],
+                                                  value: nil, permissions: [.readEncryptionRequired, .writeEncryptionRequired])
+            feature.descriptors = [CBMutableDescriptor(type: Self.uuid("2908"), value: Data([id, 3]))]
+            values[ObjectIdentifier(feature)] = Data(initial)
+            writable.insert(ObjectIdentifier(feature))
+            featureIDs[ObjectIdentifier(feature)] = id
+            reports.append(feature)
         }
         hid.characteristics = [control, mode, info, bootMouse, bootKeyboard, bootOutput, map] + reports
         return [battery, device, hid]
@@ -302,6 +319,8 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
             }
             value = lastValues[id] ?? Data(transport.profile.neutralPayload(for: id))
         } else {
+            if let id = featureIDs[key] { Log.bluetooth.notice("iPhone read feature report \(id)") }
+            if request.characteristic === reportMap, request.offset == 0 { Log.bluetooth.notice("iPhone read the report map") }
             value = values[key]
         }
         guard let value else {
@@ -341,6 +360,9 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
                 transport.setSuspended(value[0] == 0)
                 Log.bluetooth.notice("iPhone \(value[0] == 0 ? "suspended" : "resumed", privacy: .public) HID input")
             } else {
+                if let id = featureIDs[ObjectIdentifier(request.characteristic)] {
+                    Log.bluetooth.notice("iPhone set feature report \(id) to \(value[0])")
+                }
                 values[ObjectIdentifier(request.characteristic)] = value
             }
         }

@@ -33,12 +33,16 @@ public struct HIDProfile: Equatable, Hashable, Sendable {
         case touchscreen
         /// Experimental: `standard` plus a two-finger precision touchpad (report 5).
         case touchpad
+        /// Experimental: `compatibility` with a high-resolution wheel: report 7 also
+        /// carries a Resolution Multiplier feature (1 or 16) that the host may set.
+        case hiResWheel
     }
 
     /// The layout used for keyboard, pointer, scroll and consumer reports.
-    var base: Variant {
+    public var base: Variant {
         switch variant {
         case .touchscreen, .touchpad: .standard
+        case .hiResWheel: .compatibility
         default: variant
         }
     }
@@ -55,24 +59,27 @@ public struct HIDProfile: Equatable, Hashable, Sendable {
     public static let relative = HIDProfile(.relative)
 
     public var isAbsolute: Bool { variant != .relative }
-    public var supportsHorizontalScroll: Bool { variant != .compatibility }
+    public var supportsHorizontalScroll: Bool { base != .compatibility }
 
     /// Input reports, in the order their GATT characteristics are published.
     public var inputReportIDs: [UInt8] {
         switch variant {
-        case .compatibility: [5, 6, 1, 2, 7]
+        case .compatibility, .hiResWheel: [5, 6, 1, 2, 7]
         case .standard: [1, 2, 3, 4]
         case .relative: [1, 2, 4]
         case .touchscreen, .touchpad: [1, 2, 3, 4, 5]
         }
     }
 
-    public var keyboardLEDReportID: UInt8 { variant == .compatibility ? 3 : 1 }
+    public var keyboardLEDReportID: UInt8 { base == .compatibility ? 3 : 1 }
+
+    /// Feature reports and their initial values (the host may read and write them).
+    public var featureReports: [UInt8: [UInt8]] { variant == .hiResWheel ? [7: [0]] : [:] }
 
     /// Input reports the phone must subscribe to before input can be sent.
     public var requiredInputReportIDs: Set<UInt8> {
         switch variant {
-        case .compatibility: [1, 2, 7]
+        case .compatibility, .hiResWheel: [1, 2, 7]
         case .standard: [1, 2, 3]
         case .relative: [1, 2]
         // The touch surface is optional: if the phone ignores it, input still works,
@@ -81,10 +88,10 @@ public struct HIDProfile: Equatable, Hashable, Sendable {
         }
     }
 
-    public var keyboardReportID: UInt8 { variant == .compatibility ? 2 : 1 }
-    public var pointerReportID: UInt8 { variant == .compatibility ? 1 : 2 }
+    public var keyboardReportID: UInt8 { base == .compatibility ? 2 : 1 }
+    public var pointerReportID: UInt8 { base == .compatibility ? 1 : 2 }
     public var scrollReportID: UInt8 { switch base { case .compatibility: 7; case .relative: 2; default: 3 } }
-    public var consumerReportID: UInt8 { variant == .compatibility ? 6 : 4 }
+    public var consumerReportID: UInt8 { base == .compatibility ? 6 : 4 }
 
     /// The all-released value for an input report, sent when the phone subscribes.
     public func neutralPayload(for reportID: UInt8) -> [UInt8] {
@@ -108,6 +115,7 @@ public struct HIDProfile: Equatable, Hashable, Sendable {
     public var reportMap: [UInt8] {
         switch variant {
         case .compatibility: Self.compatibilityMap
+        case .hiResWheel: Self.hiResWheelMap
         case .standard: Self.standardMap
         case .relative: Self.relativeMap
         case .touchscreen: Self.standardMap + Self.touchscreenCollection
@@ -143,7 +151,7 @@ public struct HIDEncoder: Sendable {
         case .pointer(let pointer):
             let buttons = pointer.buttons
             switch profile.base {
-            case .compatibility:
+            case .compatibility, .hiResWheel:
                 let x = pointer.logicalX, y = pointer.logicalY
                 return [EncodedReport(reportID: 1, bytes: [buttons, UInt8(x & 0xFF), UInt8(x >> 8),
                                                             UInt8(y & 0xFF), UInt8(y >> 8), 0])]
@@ -175,7 +183,7 @@ public struct HIDEncoder: Sendable {
             while wheel != 0 || pan != 0 {
                 let w = Self.clamp8(wheel), p = Self.clamp8(pan)
                 switch profile.base {
-                case .compatibility:
+                case .compatibility, .hiResWheel:
                     reports.append(EncodedReport(reportID: 7, bytes: [Self.byte(w)]))
                 case .standard:
                     reports.append(EncodedReport(reportID: 3, bytes: [Self.byte(w), Self.byte(p)]))
@@ -289,6 +297,28 @@ extension HIDProfile {
         0x75, 0x08, 0x95, 0x01, 0x81, 0x03,
         // Vertical wheel in its own report (7) within the same pointer collection
         0x85, 0x07, 0x05, 0x01, 0x09, 0x38, 0x75, 0x08, 0x95, 0x01, 0x15, 0x81, 0x25, 0x7F, 0x81, 0x06,
+        0xC0, 0xC0
+    ] + compatibilityTail
+
+    /// `compatibilityMap` with the wheel inside a logical collection that also holds a
+    /// Resolution Multiplier feature (logical 0…1 = ×1…×16), as high-resolution wheels
+    /// describe it. Until the host sets the multiplier the wheel reports whole detents.
+    static let hiResWheelMap: [UInt8] = [
+        0x05, 0x01, 0x09, 0x02, 0xA1, 0x01, 0x85, 0x01,
+        0x09, 0x01, 0xA1, 0x00,
+        0x05, 0x09, 0x19, 0x01, 0x29, 0x08, 0x75, 0x01, 0x95, 0x08, 0x15, 0x00, 0x25, 0x01, 0x81, 0x02,
+        0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x75, 0x10, 0x95, 0x02, 0x15, 0x00, 0x26, 0xFF, 0x7F, 0x81, 0x02,
+        0x75, 0x08, 0x95, 0x01, 0x81, 0x03,
+        0x85, 0x07,                                     // Report ID (7)
+        0xA1, 0x02,                                     // Collection (Logical)
+        0x05, 0x01, 0x09, 0x48,                         //   Usage (Resolution Multiplier)
+        0x15, 0x00, 0x25, 0x01, 0x35, 0x01, 0x45, 0x10, //   Logical 0…1, Physical 1…16
+        0x75, 0x02, 0x95, 0x01, 0xB1, 0x02,             //   Feature (Data, Variable, Absolute), 2 bits
+        0x75, 0x06, 0xB1, 0x03,                         //   Feature padding, 6 bits
+        0x35, 0x00, 0x45, 0x00,                         //   Physical range reset
+        0x09, 0x38, 0x15, 0x81, 0x25, 0x7F,             //   Usage (Wheel), −127…127
+        0x75, 0x08, 0x95, 0x01, 0x81, 0x06,             //   Input (Data, Variable, Relative)
+        0xC0,                                           // End Collection (Logical)
         0xC0, 0xC0
     ] + compatibilityTail
 
