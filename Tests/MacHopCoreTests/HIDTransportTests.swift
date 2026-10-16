@@ -46,9 +46,10 @@ struct HIDTransportTests {
         #expect(!transport.isReady)
         transport.subscribed(3)
         #expect(transport.isReady)
-        // Each report's neutral baseline, then all-released keyboard and pointer.
-        #expect(sink.accepted.map(\.0) == [1, 2, 3, 1, 2])
-        #expect(sink.accepted.allSatisfy { $0.1.allSatisfy { $0 == 0 } || $0.0 == 2 })
+        // Each report's neutral baseline, then the all-released keyboard. Never the
+        // pointer (report 2): any pointer report shows the iPhone's pointer.
+        #expect(sink.accepted.map(\.0) == [1, 3, 1])
+        #expect(sink.accepted.allSatisfy { $0.1.allSatisfy { $0 == 0 } })
         transport.unsubscribed(3)
         #expect(!transport.isReady)
         transport.subscribed(3)
@@ -56,6 +57,38 @@ struct HIDTransportTests {
         #expect(!transport.isReady)
         transport.setSuspended(false)
         #expect(changes == [true, false, true, false, true])
+    }
+
+    @Test("Reconnecting doesn't show the iPhone's pointer, unless a button needs releasing where it was")
+    func reconnectLeavesPointerAlone() throws {
+        connectAll()
+        // Resuming (the iPhone wakes or unlocks) and reconnecting send no pointer report.
+        transport.setSuspended(true)
+        transport.setSuspended(false)
+        transport.reset()
+        for id in transport.profile.inputReportIDs { transport.subscribed(id) }
+        scheduler.advance(by: 0.1)
+        #expect(!sink.accepted.contains { $0.0 == 2 })
+        // The link drops with a button down: on reconnecting it's released where it was.
+        transport.send(.pointer(PointerReport(buttons: 1, x: 0.3, y: 0.6)))
+        scheduler.advance(by: 0.1)
+        #expect(sink.accepted.last?.1.first == 1, "the press reached the phone")
+        transport.reset()
+        sink.accepted.removeAll()
+        for id in transport.profile.inputReportIDs { transport.subscribed(id) }
+        scheduler.advance(by: 0.1)
+        let release = try #require(sink.accepted.last { $0.0 == 2 })
+        let phone = try VirtualPhone(reportMap: transport.profile.reportMap)
+        phone.receive(reportID: 2, bytes: release.1)
+        #expect(phone.buttons.isEmpty)
+        #expect(abs(phone.pointer.x / phone.screen.width - 0.3) < 0.01)
+        #expect(abs(phone.pointer.y / phone.screen.height - 0.6) < 0.01)
+        // Released once: the next reconnection sends no pointer report again.
+        transport.reset()
+        sink.accepted.removeAll()
+        for id in transport.profile.inputReportIDs { transport.subscribed(id) }
+        scheduler.advance(by: 0.1)
+        #expect(!sink.accepted.contains { $0.0 == 2 })
     }
 
     @Test("Nothing is sent before the phone is ready")
@@ -138,10 +171,11 @@ struct HIDTransportTests {
         scheduler.advance(by: 0.02)
         #expect(stalled == 1)
         #expect(!transport.isReady, "input stays off until the radio accepts something again")
-        // Stale input is gone; only the releases the phone is owed remain.
+        // Stale input is gone; only the releases the phone is owed remain (no pointer:
+        // no button was down).
         sink.refuseAll = false
         transport.radioIsReady()
-        #expect(sink.accepted.map(\.0) == [1, 2, 4])
+        #expect(sink.accepted.map(\.0) == [1, 4])
         #expect(sink.accepted[0].1 == [0, 0, 0, 0, 0, 0, 0, 0])
         #expect(transport.isReady)
         scheduler.advance(by: 5)

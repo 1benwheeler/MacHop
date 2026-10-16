@@ -280,6 +280,11 @@ final class AutomationServer {
             }
             return ["ok": true]
 
+        case "sleep", "wake":
+            // What MacHop does when the Mac sleeps and wakes, without sleeping it.
+            model.simulateSleep(command == "sleep")
+            return ["ok": true]
+
         case "pause", "resume":
             if model.settings.paused != (command == "pause") { model.togglePause() }
             return ["ok": true]

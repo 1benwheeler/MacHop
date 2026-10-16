@@ -50,6 +50,17 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     var servicesReady = false {
         didSet { if servicesReady != oldValue { update() } }
     }
+    /// While the Mac sleeps: no link to the iPhone, and no reconnecting.
+    var suspended = false {
+        didSet {
+            guard suspended != oldValue else { return }
+            if suspended {
+                stopSearch()
+                disconnect()
+            }
+            update()
+        }
+    }
 
     private var manager: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -126,7 +137,7 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     }
 
     private func update() {
-        guard let manager, manager.state == .poweredOn else {
+        guard let manager, manager.state == .poweredOn, !suspended else {
             linkState = .off
             return
         }

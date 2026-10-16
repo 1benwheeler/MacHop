@@ -45,7 +45,12 @@ final class SystemMonitor {
         observe(workspace, NSWorkspace.willSleepNotification) { $0.asleep = true }
         observe(workspace, NSWorkspace.didWakeNotification) { $0.asleep = false }
         observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.displaysAsleep = true }
-        observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.displaysAsleep = false }
+        // Screens only wake on a real wake (never during the Mac's background wakes), so
+        // they also end sleep, in case a did-wake notice never comes (an aborted sleep).
+        observe(workspace, NSWorkspace.screensDidWakeNotification) {
+            $0.displaysAsleep = false
+            $0.asleep = false
+        }
         observe(workspace, NSWorkspace.sessionDidResignActiveNotification) { $0.sessionInactive = true }
         observe(workspace, NSWorkspace.sessionDidBecomeActiveNotification) { $0.sessionInactive = false }
         let distributed = DistributedNotificationCenter.default()
@@ -64,6 +69,13 @@ final class SystemMonitor {
             }
             tokens.append((workspace, front))
         }
+    }
+
+    /// Sleep or wake as the system notices would, for testing through automation.
+    func simulate(asleep: Bool) {
+        self.asleep = asleep
+        Log.app.notice("System state: simulated \(asleep ? "sleep" : "wake", privacy: .public)")
+        onChange?()
     }
 
     private func observe(_ center: NotificationCenter, _ name: Notification.Name,

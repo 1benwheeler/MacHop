@@ -75,7 +75,10 @@ final class AppModel {
     func start() {
         // Dry runs share the real app's saved settings, so they never write them.
         if !dryRun { settings.save() }
-        monitor.onChange = { [weak self] in self?.refresh() }
+        monitor.onChange = { [weak self] in
+            self?.syncBluetoothSleep()
+            self?.refresh()
+        }
         monitor.onDisplaysChanged = { [weak self] in self?.displaysChanged() }
         monitor.onFrontChange = { [weak self] in
             if self?.owner == .phone { self?.cursor.reassertHidden() }
@@ -141,6 +144,36 @@ final class AppModel {
         }
         session.onEntryRefused = { [weak self] reason in self?.show(notice: reason) }
     }
+
+    // MARK: Sleep
+
+    /// Whether Bluetooth has let go of the iPhone because the Mac is asleep.
+    private var bluetoothAsleep = false
+
+    /// While the Mac sleeps, MacHop lets go of the iPhone completely: the link drops and
+    /// the keyboard-and-pointer service is withdrawn. Otherwise the Mac's background wakes
+    /// (Power Nap and the like) reconnect it about once a minute, each time showing the
+    /// iPhone's pointer, and the reconnecting itself keeps waking the Mac. A real wake
+    /// (macOS never reports the background ones) brings both back. Closing the lid with
+    /// an external display attached doesn't sleep the Mac, so it changes nothing.
+    private func syncBluetoothSleep() {
+        guard !dryRun, !stopping, monitor.asleep != bluetoothAsleep else { return }
+        bluetoothAsleep = monitor.asleep
+        if bluetoothAsleep {
+            Log.bluetooth.notice("Mac going to sleep: letting go of the iPhone")
+            session.returnToMac(.unavailable("Your Mac is going to sleep"))
+            connector.suspended = true
+            peripheral.stop()
+            connector.servicesReady = false
+        } else {
+            Log.bluetooth.notice("Mac awake: connecting to the iPhone again")
+            connector.suspended = false
+            peripheral.start()
+        }
+    }
+
+    /// For testing through automation: sleep or wake as the system notices would.
+    func simulateSleep(_ asleep: Bool) { monitor.simulate(asleep: asleep) }
 
     // MARK: Availability
 

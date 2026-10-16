@@ -38,6 +38,36 @@ extension Lab {
         return nil
     }
 
+    /// What appears on the iPhone when MacHop lets go of it for a Mac sleep and reconnects
+    /// on waking (both simulated). Returns the centres, as fractions of the screen, of
+    /// changes seen while disconnected and in the `watch` seconds after it's ready again,
+    /// ignoring the status bar. The pointer would show as a change near where it was sent.
+    public func changesAroundSleep(watch: Double = 4) throws -> (asleep: [(Double, Double)], awake: [(Double, Double)]) {
+        try requireExpectedScreen()
+        // Let any earlier pointer fade first (iOS fades it after about 15 s).
+        Thread.sleep(forTimeInterval: 18)
+        guard let reference = settledFrame(after: 0.2), let size = screen.pixelSize else { return ([], []) }
+        func changes(in frame: Frame) -> [(Double, Double)] {
+            FrameAnalysis.changedRegions(reference, frame)
+                .filter { $0.area < size.width * size.height / 50 && Double($0.centreY) / Double(size.height) > 0.06 }
+                .map { ($0.centreX / Double(size.width), $0.centreY / Double(size.height)) }
+        }
+        try app.send(["cmd": "sleep"])
+        Thread.sleep(forTimeInterval: 4)
+        let asleep = settledFrame(after: 0.2).map(changes) ?? []
+        try app.send(["cmd": "wake"])
+        guard app.waitUntilReady(timeout: 30) else {
+            throw AutomationClient.ClientError.failed("The iPhone didn't reconnect within 30 s of the simulated wake.")
+        }
+        var awake: [(Double, Double)] = []
+        let start = clock
+        while clock - start < watch {
+            Thread.sleep(forTimeInterval: 0.3)
+            if let frame = screen.frame(after: clock - 0.02) { awake += changes(in: frame) }
+        }
+        return (asleep, awake)
+    }
+
     /// Whether a key press (keyboard usage and modifier bits) makes the pointer disappear
     /// within `within` seconds. With no key and no modifiers this is the control run.
     public func pointerHidesOnKey(usage: UInt8?, modifiers: UInt8, within: Double = 0.5,

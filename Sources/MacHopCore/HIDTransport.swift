@@ -67,6 +67,10 @@ public final class HIDTransport: HIDLink {
     private var lastMotionSubmission = -Double.infinity
     /// Buttons held according to the last pointer report the radio accepted.
     private var lastPointerButtons: UInt8 = 0
+    /// Where a pointer button was pressed, until a release reaches the phone. Unlike
+    /// the rest, it survives losing the link: if the phone could still be holding the
+    /// button, it's released there on reconnecting.
+    private var heldPointer: PointerReport?
     /// The most recent pointer position handed to the transport.
     private var lastPointer: PointerReport?
     /// After a stall, input stays off until the radio accepts the queued releases.
@@ -85,11 +89,13 @@ public final class HIDTransport: HIDLink {
     // MARK: Link lifecycle (called by the radio adapter)
 
     /// The phone subscribed to an input report. It first receives that report's
-    /// all-released value, so it never inherits a stale held key.
+    /// all-released value, so it never inherits a stale held key. The pointer is the
+    /// exception: any pointer report shows the iPhone's pointer where it says (the
+    /// neutral one, in the middle of the screen), so none is sent until it's needed.
     public func subscribed(_ reportID: UInt8) {
         guard profile.inputReportIDs.contains(reportID) else { return }
         let isNew = subscribedReports.insert(reportID).inserted
-        if isNew {
+        if isNew, reportID != profile.pointerReportID {
             enqueue(.raw(EncodedReport(reportID: reportID, bytes: profile.neutralPayload(for: reportID))))
         }
         updateReadiness()
@@ -131,7 +137,10 @@ public final class HIDTransport: HIDLink {
 
     public func send(_ report: HIDReport) {
         guard isReady else { return }
-        if case .pointer(let pointer) = report { lastPointer = pointer }
+        if case .pointer(let pointer) = report {
+            lastPointer = pointer
+            if pointer.buttons != 0 { heldPointer = pointer }
+        }
         enqueue(.report(report, transition: false))
         drain()
     }
@@ -183,8 +192,10 @@ public final class HIDTransport: HIDLink {
         if subscribedReports.contains(profile.keyboardReportID) {
             enqueue(.report(.keyboard(.released), transition: false))
         }
-        if subscribedReports.contains(profile.pointerReportID) {
-            if let last = lastPointer {
+        // A pointer report shows the iPhone's pointer, so it's only released when a
+        // button may still be down, and where the pointer was left.
+        if subscribedReports.contains(profile.pointerReportID), lastPointerButtons != 0 || heldPointer != nil {
+            if let last = lastPointer ?? heldPointer {
                 enqueue(.report(.pointer(PointerReport(buttons: 0, x: last.x, y: last.y)), transition: false))
             } else {
                 enqueue(.raw(EncodedReport(reportID: profile.pointerReportID,
@@ -234,7 +245,10 @@ public final class HIDTransport: HIDLink {
                     stats.submitted += 1
                     remaining = remaining.dropFirst()
                     // Byte 0 of every pointer-report payload is the button byte.
-                    if part.reportID == profile.pointerReportID { lastPointerButtons = part.bytes[0] }
+                    if part.reportID == profile.pointerReportID {
+                        lastPointerButtons = part.bytes[0]
+                        if part.bytes[0] == 0 { heldPointer = nil }
+                    }
                     if isStalled {
                         isStalled = false
                         recovered = true

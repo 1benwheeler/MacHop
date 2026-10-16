@@ -14,6 +14,7 @@ Usage: machop-lab <command> [options]
   snapshot [file.png]          Save the iPhone's screen
   text                         Print the text currently on the iPhone's screen
   pointer                      Measure absolute pointer placement across the screen
+  sleep-check                  Simulate Mac sleep and wake; watch the iPhone for its pointer
   scroll [--profile P] [--trials N] [--size S] [--steps N] [--interval-ms T] [--at PERCENT]
                                Scroll a list and measure that the content moved
   scroll-matrix [--trials N]   Compare report layouts, step sizes and timings
@@ -248,6 +249,22 @@ case "pointer":
             : "The AssistiveTouch pointer is not visible in USB screen capture, so placement cannot be measured optically."
         print(line)
         report("Pointer placement", [line])
+    } catch { fail("\(error)") }
+
+case "sleep-check":
+    // Simulates the Mac sleeping and waking, and watches the iPhone for its pointer.
+    let app = connectApp()
+    requireReady(app)
+    let lab = Lab(app: app, screen: openScreen())
+    do {
+        let seen = try lab.changesAroundSleep()
+        func describe(_ points: [(Double, Double)]) -> String {
+            points.isEmpty ? "nothing" : Set(points.map { String(format: "(%.2f, %.2f)", $0.0, $0.1) }).sorted().joined(separator: " ")
+        }
+        let lines = ["While the Mac slept: changes at \(describe(seen.asleep))",
+                     "After it woke and the iPhone reconnected: changes at \(describe(seen.awake))"]
+        lines.forEach { print($0) }
+        report("Sleep check", lines)
     } catch { fail("\(error)") }
 
 case "pointer-fade":
