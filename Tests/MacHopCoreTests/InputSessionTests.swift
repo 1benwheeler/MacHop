@@ -498,16 +498,21 @@ struct InputSessionTests {
         sim.move(dx: 100, dy: 0)
         sim.settle()
         let before = sim.phone.pointer
-        sim.trackpadScroll(dy: -160, steps: 10)
+        // A steady 160-point scroll over half a second.
+        sim.trackpadScroll(dy: -160, steps: 40)
         sim.settle()
         // Fingers up: the touch (and so the content) moves up, scaled to the phone's screen.
+        // Movement still waiting for a re-grip when the fingers lift is left to iOS's glide.
         let link = try #require(sim.session.screenLink)
-        #expect(abs(sim.phone.dragScroll.y - -160 * 852 / link.phone.height) < 2)
+        let expected = -160 * 852 / link.phone.height
+        #expect(sim.phone.dragScroll.y <= expected * 0.75 && sim.phone.dragScroll.y >= expected - 2,
+                "content moved \(sim.phone.dragScroll.y) of \(expected)")
         #expect(sim.phone.clicks.isEmpty, "a scroll must never tap")
         #expect(sim.phone.buttons.isEmpty)
-        // Like a click-and-hold drag, the pointer stays where the drag ended…
+        // The pointer re-grips rather than travelling with the content, so it ends close
+        // to where it started…
         #expect(abs(sim.phone.pointer.x - before.x) < 0.5)
-        #expect(abs((sim.phone.pointer.y - before.y) - sim.phone.dragScroll.y) < 1)
+        #expect(abs(sim.phone.pointer.y - before.y) <= 852 * TouchScroller.strokeSpan + 1)
         // …and the session agrees, so moving on continues from there.
         let pointer = try #require(sim.session.phonePointer)
         #expect(abs(pointer.y / link.phone.height * 852 - sim.phone.pointer.y) < 1)

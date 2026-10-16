@@ -747,7 +747,7 @@ public final class InputSession {
         let scale = settings.scroll.speed * (settings.scroll.reversed ? -1 : 1)
         // Natural scrolling: the content (and so the touch) follows the fingers.
         let delta = Point(x: settings.scroll.horizontal ? input.dx * scale : 0, y: input.dy * scale)
-        perform(scroller?.scroll(by: delta) ?? [])
+        perform(scroller?.scroll(by: delta, at: clock()) ?? [])
         strokeGeneration += 1
         let generation = strokeGeneration
         schedule?(Self.strokeTimeout) { [weak self] in

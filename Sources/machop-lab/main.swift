@@ -310,10 +310,15 @@ case "long-scroll":
     requireReady(app)
     let lab = Lab(app: app, screen: openScreen())
     do {
+        let fast = CommandLine.arguments.contains("--fast")
         for upwards in [false, true] {
-            let r = try lab.sessionLongScroll(upwards: upwards)
+            // Fast: big trackpad steps arriving quickly, like a hard flick.
+            // `--screen Apps`: a long Settings page (Settings → Apps), so the list doesn't run out.
+            let page = CommandLine.arguments.firstIndex(of: "--screen").flatMap { $0 + 1 < CommandLine.arguments.count ? CommandLine.arguments[$0 + 1] : nil } ?? "Settings"
+            let r = fast ? try lab.sessionLongScroll(events: 30, points: 70, interval: 0.008, upwards: upwards, screen: page)
+                         : try lab.sessionLongScroll(upwards: upwards, screen: page)
             func fmt(_ p: (Double, Double)?) -> String { p.map { String(format: "(%.2f, %.2f)", $0.0, $0.1) } ?? "?" }
-            print("\(upwards ? "up" : "down"): \(r.smoothness); pointer \(fmt(r.pointerBefore)) → \(fmt(r.pointerAfter)); still on Settings: \(r.stillSettings)")
+            print("\(upwards ? "up" : "down"): \(r.smoothness); pointer \(fmt(r.pointerBefore)) → \(fmt(r.pointerAfter)); same screen after: \(r.stillSettings)")
             Thread.sleep(forTimeInterval: 1.5)
         }
     } catch { fail("\(error)") }

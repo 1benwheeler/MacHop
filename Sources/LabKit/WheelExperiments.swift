@@ -443,9 +443,11 @@ extension Lab {
     /// Per-frame movement statistics while content moves (points).
     public struct Smoothness: CustomStringConvertible {
         public var total: Double, perStep: Double?, biggestFrame: Double, typicalFrame: Double, stillShare: Double
+        /// Movement against the main direction (the content snapping back), in points.
+        public var backwards = 0.0
         public var description: String {
-            String(format: "moved %.0f pt%@; biggest single-frame jump %.0f pt, typical %.0f pt; %.0f%% of frames still while moving",
-                   total, perStep.map { String(format: " (%.0f pt per step)", $0) } ?? "", biggestFrame, typicalFrame, stillShare * 100)
+            String(format: "moved %.0f pt%@; biggest single-frame jump %.0f pt, typical %.0f pt; %.0f%% of frames still while moving; %.0f pt backwards",
+                   total, perStep.map { String(format: " (%.0f pt per step)", $0) } ?? "", biggestFrame, typicalFrame, stillShare * 100, backwards)
         }
     }
 
@@ -457,9 +459,14 @@ extension Lab {
         }
         let window = Array(deltas[first...last])
         let moving = window.filter { $0 > 0.5 }.sorted()
-        let total = abs(trace.samples.last?.points ?? 0)
-        return Smoothness(total: total, perStep: steps.map { total / Double($0) }, biggestFrame: moving.last ?? 0,
-                          typicalFrame: moving[moving.count / 2], stillShare: Double(window.count - moving.count) / Double(window.count))
+        let net = trace.samples.last?.points ?? 0
+        let total = abs(net)
+        let signed = pairs.map { $0.0.points - $0.1.points }
+        let backwards = signed.filter { net >= 0 ? $0 < -0.5 : $0 > 0.5 }.reduce(0) { $0 + abs($1) }
+        var result = Smoothness(total: total, perStep: steps.map { total / Double($0) }, biggestFrame: moving.last ?? 0,
+                                typicalFrame: moving[moving.count / 2], stillShare: Double(window.count - moving.count) / Double(window.count))
+        result.backwards = backwards
+        return result
     }
 
     /// Wheel steps and keyboard keys, each measured for smoothness, on the current profile.
@@ -584,9 +591,10 @@ extension Lab {
 extension Lab {
     /// A long two-finger scroll through MacHop (as the trackpad sends it), on the Settings
     /// list: how the content moves, where the pointer ends up, and that nothing was tapped.
-    public func sessionLongScroll(events: Int = 80, points: Double = 15, upwards: Bool = false) throws
+    public func sessionLongScroll(events: Int = 80, points: Double = 15, interval: Double = 0.016, upwards: Bool = false,
+                                  screen expected: String = "Settings") throws
         -> (smoothness: Smoothness, pointerBefore: (Double, Double)?, pointerAfter: (Double, Double)?, stillSettings: Bool) {
-        try requireExpectedScreen()
+        try requireExpectedScreen(expected)
         try app.send(["cmd": "enter"])
         if let edge = LabEdge(status: try app.status()) {
             let deeper = edge.delta(outward: 20)
@@ -599,18 +607,18 @@ extension Lab {
         }
         let before = try pointer()
         let dy = upwards ? points : -points
-        let trace = try trace(duration: Double(events) * 0.016 + 2.0) {
+        let trace = try trace(duration: Double(events) * interval + 2.0) {
             try self.app.send(["cmd": "scroll", "dy": 0, "phase": "mayBegin"])
             for index in 0..<events {
                 try self.app.send(["cmd": "scroll", "dy": dy, "phase": index == 0 ? "began" : "changed"])
-                Thread.sleep(forTimeInterval: 0.016)
+                Thread.sleep(forTimeInterval: interval)
             }
             try self.app.send(["cmd": "scroll", "dy": 0, "phase": "ended"])
         }
         let after = try pointer()
         try app.send(["cmd": "return"])
         rest(1)
-        let still = screen.recognizedText().contains { $0.trimmingCharacters(in: .whitespaces) == "Settings" }
+        let still = screen.recognizedText().contains { $0.trimmingCharacters(in: .whitespaces) == expected }
         return (smoothness(trace, steps: nil), before, after, still)
     }
 }

@@ -1,9 +1,16 @@
 import Testing
 @testable import MacHopCore
 
+/// Trackpad event times: each call is 16 ms after the last.
+final class EventClock {
+    private var time = 0.0
+    func next() -> Double { time += 0.016; return time }
+}
+
 @Suite("Touch scrolling")
 struct TouchScrollerTests {
     let size = (width: 286.0, height: 620.0)
+    let clock = EventClock()
 
     /// Replays actions and checks the touch rules: presses and releases alternate,
     /// every stroke stays in the safe area, and no stroke ends as a tap.
@@ -43,8 +50,8 @@ struct TouchScrollerTests {
     @Test("Resting fingers never press")
     func smallMovementNoPress() {
         var scroller = TouchScroller(anchor: Point(x: 140, y: 300), phoneSize: size)
-        var actions = scroller.scroll(by: Point(x: 0, y: -5))
-        actions += scroller.scroll(by: Point(x: 0, y: 4))
+        var actions = scroller.scroll(by: Point(x: 0, y: -5), at: clock.next())
+        actions += scroller.scroll(by: Point(x: 0, y: 4), at: clock.next())
         actions += scroller.finish()
         #expect(actions.isEmpty)
     }
@@ -52,7 +59,7 @@ struct TouchScrollerTests {
     @Test("A short scroll is stretched past the tap threshold")
     func shortScroll() {
         var scroller = TouchScroller(anchor: Point(x: 140, y: 300), phoneSize: size)
-        var actions = scroller.scroll(by: Point(x: 0, y: -12.5))
+        var actions = scroller.scroll(by: Point(x: 0, y: -12.5), at: clock.next())
         actions += scroller.finish()
         check(actions, scroller)
         #expect(actions.first == .press(Point(x: 140, y: 300)))
@@ -73,7 +80,7 @@ struct TouchScrollerTests {
             let direction = Point(x: random(-1...1), y: random(-1...1))
             for _ in 0..<Int(random(1...40)) {
                 let speed = random(0.5...60)
-                actions += scroller.scroll(by: Point(x: direction.x * speed, y: direction.y * speed))
+                actions += scroller.scroll(by: Point(x: direction.x * speed, y: direction.y * speed), at: clock.next())
             }
             actions += scroller.finish()
             check(actions, scroller)
@@ -85,7 +92,8 @@ struct TouchScrollerTests {
         let anchor = Point(x: 140, y: 300)
         var scroller = TouchScroller(anchor: anchor, phoneSize: size)
         var actions: [TouchScroller.Action] = []
-        for _ in 0..<100 { actions += scroller.scroll(by: Point(x: 0, y: -20)) }
+        // A steady scroll: 8 points every 16 ms.
+        for _ in 0..<100 { actions += scroller.scroll(by: Point(x: 0, y: -8), at: clock.next()) }
         actions += scroller.finish()
         check(actions, scroller)
         // Every stroke starts where the pointer was.
@@ -102,9 +110,48 @@ struct TouchScrollerTests {
             case .hop: break
             }
         }
-        // All 2,000 points of finger movement reach the content.
-        #expect(abs(moved + 2000) < 1)
+        // The 800 points of finger movement reach the content, except what was still
+        // waiting for a re-grip when the fingers lifted.
+        #expect(moved <= -800 + 2 * span + 0.001 && moved >= -800 - 0.001, "moved \(moved)")
         #expect(abs(scroller.endPoint.y - anchor.y) <= span + 0.001, "the pointer ends near where it began")
+    }
+
+    @Test("A re-grip lets go, waits for the iPhone to see the lift, then presses again; a fast flick re-grips once per event")
+    func regripWaits() {
+        var scroller = TouchScroller(anchor: Point(x: 140, y: 300), phoneSize: size)
+        var timed: [(Double, TouchScroller.Action)] = []
+        // A hard flick: 80 points every 8 ms.
+        var time = 0.0
+        for _ in 0..<40 {
+            time += 0.008
+            timed += scroller.scroll(by: Point(x: 0, y: -80), at: time).map { (time, $0) }
+        }
+        timed += scroller.finish().map { (time, $0) }
+        check(timed.map(\.1), scroller)
+        var releasedAt: Double?
+        for (when, action) in timed {
+            switch action {
+            case .release: releasedAt = when
+            case .press:
+                if let releasedAt { #expect(when - releasedAt >= 0.04, "pressed again too soon for the iPhone to see the lift") }
+            default: break
+            }
+        }
+        // Every stroke is held long enough not to read as a tap.
+        var pressedTime: Double?
+        for (when, action) in timed {
+            if case .press = action { pressedTime = when }
+            if case .release = action, let pressedTime { #expect(when - pressedTime >= TouchScroller.minimumHold - 1e-9) }
+        }
+        // Never more than one release per event.
+        let releasesPerEvent = Dictionary(grouping: timed.filter { if case .release = $0.1 { true } else { false } }, by: \.0)
+        #expect(releasesPerEvent.values.allSatisfy { $0.count == 1 })
+        // The content still went one way only: every stroke dragged upwards.
+        var pressed = Point.zero
+        for (_, action) in timed {
+            if case .press(let p) = action { pressed = p }
+            if case .release(let p) = action { #expect(p.y <= pressed.y) }
+        }
     }
 
     @Test("Reversing near the edge re-grips somewhere with room, never in a flurry of tiny strokes")
@@ -112,19 +159,20 @@ struct TouchScrollerTests {
         // The pointer starts low down, scrolls up (pressing near the bottom), then reverses.
         var scroller = TouchScroller(anchor: Point(x: 140, y: 560), phoneSize: size)
         var actions: [TouchScroller.Action] = []
-        for _ in 0..<30 { actions += scroller.scroll(by: Point(x: 0, y: -20)) }
-        for _ in 0..<60 { actions += scroller.scroll(by: Point(x: 0, y: 20)) }
+        for _ in 0..<30 { actions += scroller.scroll(by: Point(x: 0, y: -20), at: clock.next()) }
+        for _ in 0..<60 { actions += scroller.scroll(by: Point(x: 0, y: 20), at: clock.next()) }
         actions += scroller.finish()
         check(actions, scroller)
         let presses = actions.filter { if case .press = $0 { true } else { false } }.count
-        #expect(presses < 20, "\(presses) strokes for 1,800 points of movement")
+        let span = size.height * TouchScroller.strokeSpan
+        #expect(presses <= Int(1800 / span) + 6, "\(presses) strokes for 1,800 points of movement")
     }
 
     @Test("The drag starts exactly at the pointer whenever there is room")
     func startsAtPointer() {
         for anchor in [Point(x: 100, y: 200), Point(x: 200, y: 450), Point(x: 143, y: 310)] {
             var scroller = TouchScroller(anchor: anchor, phoneSize: size)
-            let actions = scroller.scroll(by: Point(x: 0, y: -20)) + scroller.scroll(by: Point(x: 0, y: 30))
+            let actions = scroller.scroll(by: Point(x: 0, y: -20), at: clock.next()) + scroller.scroll(by: Point(x: 0, y: 30), at: clock.next())
             #expect(actions.first == .press(anchor))
         }
     }
