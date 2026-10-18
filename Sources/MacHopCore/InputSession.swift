@@ -739,8 +739,7 @@ public final class InputSession {
         }
         guard input.phase != .mayBegin, let pointer = phonePointer, let screenLink else { return }
         if scroller == nil {
-            scroller = TouchScroller(anchor: pointer, phoneSize: (screenLink.phone.width, screenLink.phone.height),
-                                     regrip: link.pointerIsAbsolute)
+            scroller = TouchScroller(anchor: pointer, phoneSize: (screenLink.phone.width, screenLink.phone.height))
         }
         let scale = settings.scroll.speed * (settings.scroll.reversed ? -1 : 1)
         // Natural scrolling: the content (and so the touch) follows the fingers.

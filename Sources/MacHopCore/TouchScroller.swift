@@ -18,7 +18,11 @@
 /// - Drags stay clear of the top and bottom edges, where iOS treats a drag as
 ///   opening Notification/Control Centre or going Home.
 ///
-/// A long scroll re-grips instead of running the pointer to the top of the screen:
+/// By default a scroll is one drag: at the edge of the safe area it lets go (iOS carries
+/// the flick on) and the rest of the gesture is ignored. Ben found the alternative below
+/// glitchy (the pointer visibly hops back, worst when dragging sideways), so it's off.
+///
+/// With `regrip`, a long scroll re-grips instead of running the pointer to the top of the screen:
 /// once a stroke has carried the pointer `strokeSpan` from where it pressed (or to
 /// the edge of the safe area), it lets go there, and after `regripGap` the pointer
 /// hops back to where the scroll began and a new stroke carries on with the movement
@@ -46,6 +50,9 @@ public struct TouchScroller: Sendable {
     public static let regripGap = 0.05
     /// The shortest a stroke is held before it lets go, so the iPhone never reads it as a tap.
     public static let minimumHold = 0.05
+    /// The furthest one event may move the touch (phone points), so even a hard flick
+    /// takes several events and the iPhone always sees a drag, never a tap.
+    public static let maximumStep = 80.0
 
     private var pending = Point.zero
     private var pressedAt: Point?
@@ -67,7 +74,7 @@ public struct TouchScroller: Sendable {
     /// Where the pointer is left: the end of the drag, or the anchor if none happened.
     public var endPoint: Point { touch ?? anchor }
 
-    public init(anchor: Point, phoneSize: (width: Double, height: Double), regrip: Bool = true) {
+    public init(anchor: Point, phoneSize: (width: Double, height: Double), regrip: Bool = false) {
         self.anchor = anchor
         self.regrip = regrip
         safeArea = Rect(x: phoneSize.width * 0.04, y: phoneSize.height * 0.08,
@@ -116,7 +123,7 @@ public struct TouchScroller: Sendable {
     /// go there once it has been held long enough; the rest waits for the re-grip.
     private mutating func advance(at time: Double) -> [Action] {
         guard let current = touch, let pressed = pressedAt, length(pending) > 0.001 else { return [] }
-        let move = regrip ? capped(pending, to: span / 3) : pending
+        let move = capped(pending, to: regrip ? span / 3 : Self.maximumStep)
         let target = Point(x: current.x + move.x, y: current.y + move.y)
         let travelled = Point(x: target.x - pressed.x, y: target.y - pressed.y)
         if safeArea.contains(target) && length(travelled) <= span {
@@ -124,13 +131,18 @@ public struct TouchScroller: Sendable {
             pending = Point(x: pending.x - move.x, y: pending.y - move.y)
             return [.move(target)]
         }
-        let limit = furthest(from: current, by: move, pressedAt: pressed)
+        // One drag stops exactly at the edge; a re-gripping stroke stops along its path.
+        let limit = regrip ? furthest(from: current, by: move, pressedAt: pressed) : clamp(target)
         pending = Point(x: pending.x - (limit.x - current.x), y: pending.y - (limit.y - current.y))
         touch = limit
         var actions: [Action] = [.move(limit)]
         guard regrip else {
-            actions += release()
-            exhausted = true
+            // At the edge: let go once the press has been held long enough not to read as a
+            // tap (until then it waits there, pressed); iOS carries the flick on.
+            if time - pressTime >= Self.minimumHold {
+                actions += release()
+                exhausted = true
+            }
             return actions
         }
         if time - pressTime >= Self.minimumHold {

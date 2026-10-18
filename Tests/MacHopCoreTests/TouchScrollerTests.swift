@@ -87,10 +87,51 @@ struct TouchScrollerTests {
         }
     }
 
+    @Test("By default a long scroll is one drag: it lets go at the edge once and never hops back")
+    func longScrollOneDrag() {
+        let anchor = Point(x: 140, y: 300)
+        var scroller = TouchScroller(anchor: anchor, phoneSize: size)
+        var timed: [(Double, TouchScroller.Action)] = []
+        var time = 0.0
+        for _ in 0..<100 {
+            time += 0.016
+            timed += scroller.scroll(by: Point(x: 0, y: -20), at: time).map { (time, $0) }
+        }
+        timed += scroller.finish().map { (time, $0) }
+        let actions = timed.map(\.1)
+        check(actions, scroller)
+        let presses = actions.filter { if case .press = $0 { true } else { false } }
+        #expect(presses == [.press(anchor)], "one drag, starting exactly at the pointer")
+        #expect(!actions.contains { if case .hop = $0 { true } else { false } }, "the pointer never hops back")
+        // It let go at the top of the safe area, where the pointer now stays.
+        #expect(scroller.endPoint.y == scroller.safeArea.minY)
+        #expect(actions.last == .release(scroller.endPoint))
+        // Held long enough not to read as a tap.
+        let pressedAt = timed.first { if case .press = $0.1 { true } else { false } }!.0
+        let releasedAt = timed.first { if case .release = $0.1 { true } else { false } }!.0
+        #expect(releasedAt - pressedAt >= TouchScroller.minimumHold - 1e-9)
+    }
+
+    @Test("Even a hard flick moves the touch over several events, never press and release at once")
+    func hardFlickStaysADrag() {
+        var scroller = TouchScroller(anchor: Point(x: 140, y: 500), phoneSize: size)
+        var timed: [(Double, TouchScroller.Action)] = []
+        var time = 0.0
+        for _ in 0..<10 {
+            time += 0.008
+            timed += scroller.scroll(by: Point(x: 0, y: -300), at: time).map { (time, $0) }
+        }
+        timed += scroller.finish().map { (time, $0) }
+        check(timed.map(\.1), scroller)
+        let pressedAt = timed.first { if case .press = $0.1 { true } else { false } }!.0
+        let releasedAt = timed.first { if case .release = $0.1 { true } else { false } }!.0
+        #expect(releasedAt - pressedAt >= TouchScroller.minimumHold - 1e-9)
+    }
+
     @Test("A long scroll re-grips from the pointer's spot instead of running it to the top, losing no movement")
     func longScroll() {
         let anchor = Point(x: 140, y: 300)
-        var scroller = TouchScroller(anchor: anchor, phoneSize: size)
+        var scroller = TouchScroller(anchor: anchor, phoneSize: size, regrip: true)
         var actions: [TouchScroller.Action] = []
         // A steady scroll: 8 points every 16 ms.
         for _ in 0..<100 { actions += scroller.scroll(by: Point(x: 0, y: -8), at: clock.next()) }
@@ -119,7 +160,7 @@ struct TouchScrollerTests {
 
     @Test("A re-grip lets go, waits for the iPhone to see the lift, then presses again; a fast flick re-grips once per event")
     func regripWaits() {
-        var scroller = TouchScroller(anchor: Point(x: 140, y: 300), phoneSize: size)
+        var scroller = TouchScroller(anchor: Point(x: 140, y: 300), phoneSize: size, regrip: true)
         var timed: [(Double, TouchScroller.Action)] = []
         // A hard flick: 80 points every 8 ms.
         var time = 0.0
@@ -158,7 +199,7 @@ struct TouchScrollerTests {
     @Test("Reversing near the edge re-grips somewhere with room, never in a flurry of tiny strokes")
     func reversalNearEdge() {
         // The pointer starts low down, scrolls up (pressing near the bottom), then reverses.
-        var scroller = TouchScroller(anchor: Point(x: 140, y: 560), phoneSize: size)
+        var scroller = TouchScroller(anchor: Point(x: 140, y: 560), phoneSize: size, regrip: true)
         var actions: [TouchScroller.Action] = []
         for _ in 0..<30 { actions += scroller.scroll(by: Point(x: 0, y: -20), at: clock.next()) }
         for _ in 0..<60 { actions += scroller.scroll(by: Point(x: 0, y: 20), at: clock.next()) }
