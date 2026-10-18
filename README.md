@@ -75,7 +75,7 @@ MacHop lives in your menu bar. Its menu has a switch to turn it off and on, your
 </p>
 
 - **Match the drawing to your iPhone:** drag it to the side or top of your screen where it really sits, and choose Portrait or Landscape. If the Dynamic Island is on the other side from the drawing's, click **Flip**, or the pointer will move the wrong way on the iPhone.
-- **Two-finger scrolling:** choose how it works on the Scrolling page. **Drag** (the default) scrolls smoothly, like a finger, with the iPhone's own momentum; on long scrolls the pointer hops back so it stays near where you started. **Scroll wheel** keeps the pointer still, but iPhone moves the page in small steps. Or turn it off and drag by hand.
+- **Two-finger scrolling:** choose how it works on the Scrolling page. **Drag** (the default) scrolls smoothly, like a finger, with the iPhone's own momentum; the pointer moves with the page, as it does when you click and drag. **Scroll wheel** keeps the pointer still, but iPhone moves the page in small steps. Or turn it off and drag by hand.
 - **Volume and media keys** stay with your Mac unless you choose to send them to the iPhone (Settings).
 - **Pointer speed** and **edge resistance** are on the My iPhone page; the defaults suit most people.
 
