@@ -155,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let credits = NSMutableAttributedString()
         func add(_ text: String, link: URL? = nil) {
             var attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 12),
+                .font: NSFont.systemFont(ofSize: 11),
                 .foregroundColor: NSColor.secondaryLabelColor,
                 .paragraphStyle: centred
             ]
