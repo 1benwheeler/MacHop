@@ -101,9 +101,8 @@ final class SystemCursor: CursorControl {
 
 /// macOS only lets the frontmost app hide the cursor. A menu-bar utility is never
 /// frontmost, so it sets the private WindowServer connection property
-/// "SetsCursorInBackground" on its own connection. This is the same technique
-/// used by Barrier/Deskflow-style keyboard-and-mouse sharing tools. It is not a
-/// public API: it can change in future macOS releases and rules out the Mac App
+/// "SetsCursorInBackground" on its own connection, as keyboard-and-mouse sharing
+/// tools do. It is not a public API: it can change in future macOS releases and rules out the Mac App
 /// Store. Symbols are looked up at runtime, so a missing symbol only means the
 /// cursor stays visible.
 enum BackgroundCursorPermission {

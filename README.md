@@ -131,8 +131,6 @@ Universal Clipboard is Apple's, not MacHop's. Check that Handoff is on (Mac: **S
 
 Made by **Ben Wheeler**: [1benwheeler.com](https://1benwheeler.com/).
 
-MacHop's Bluetooth keyboard and pointer layout is adapted from [BT Remote](https://github.com/jqssun/darwin-bt-remote) by jqssun. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-
 ## Licence
 
 [GNU Affero General Public License v3.0 only](LICENSE). You're free to use, study, change and share MacHop; if you share a changed version, you must share its source too.
