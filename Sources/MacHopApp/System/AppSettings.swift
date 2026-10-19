@@ -20,6 +20,8 @@ nonisolated struct AppSettings: Codable, Equatable {
     /// The gestures step of the setup guide, once finished. MacHop can't see the
     /// iPhone's AssistiveTouch settings, so this is remembered instead.
     var gestureSetup: GestureSetup?
+    /// Whether moving onto a sleeping iPhone (or ⌃⌥⌘I) wakes it. Absent means off.
+    var wakesPhone: Bool?
 
     enum GestureSetup: String, Codable { case done, skipped }
 

@@ -20,6 +20,8 @@ public enum KeyMap {
     public static let capsLockKeyCode: UInt16 = 57
     public static let functionKeyCode: UInt16 = 63
     public static let escapeKeyCode: UInt16 = 53
+    /// The I key (ANSI position): ⌃⌥⌘I jumps to the iPhone and back.
+    public static let jumpKeyCode: UInt16 = 34
     public static let capsLockUsage: UInt8 = 0x39
 
     private struct Modifier {

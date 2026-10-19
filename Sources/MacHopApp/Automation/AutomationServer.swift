@@ -249,6 +249,16 @@ final class AutomationServer {
             transport.send(.keyboard(.released))
             return ["ok": true, "typed": typed]
 
+        case "hid.wake":
+            // Lab: which input wakes a suspended iPhone. Shift by default.
+            let reports: [HIDReport] = switch request["with"] as? String {
+            case "released": [.keyboard(.released)]
+            case "pointer": [.pointer(PointerReport(buttons: 0, x: number("x", 0.5), y: number("y", 0.5)))]
+            case "consumer": [.consumer(ConsumerReport(usage: UInt16(number("usage")))), .consumer(.released)]
+            default: HIDTransport.wakeReports
+            }
+            return ["ok": transport.wake(with: reports), "suspended": transport.isSuspended]
+
         case "profile":
             guard let variant = HIDProfile.Variant(rawValue: request["variant"] as? String ?? "") else {
                 return ["ok": false, "error": "unknown profile"]
@@ -307,6 +317,7 @@ final class AutomationServer {
             "enabled": session.isEnabled,
             "disabledReason": session.disabledReason,
             "ready": model.transport.isReady,
+            "suspended": model.transport.isSuspended,
             "subscriptions": model.transport.subscribedReports.sorted().map(Int.init),
             "profile": model.settings.profile.rawValue,
             "scrollStyle": model.settings.session.scroll.style.rawValue,

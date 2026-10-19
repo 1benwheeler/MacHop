@@ -273,7 +273,7 @@ extension AppModel {
     var statusColour: Color {
         switch status {
         case .ready, .controlling: .green
-        case .connecting, .waitingForPhone, .phoneLocked, .choosePhone, .paused, .blocked: .orange
+        case .connecting, .waitingForPhone, .phoneAsleep, .choosePhone, .paused, .blocked: .orange
         default: .red
         }
     }

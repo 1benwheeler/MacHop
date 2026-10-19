@@ -40,6 +40,8 @@ While you're on the iPhone, the Mac's cursor is hidden, and whenever it nears a 
 
 MacHop publishes a standard Bluetooth LE keyboard and pointer (HID over GATT), and keeps a connection open to your chosen iPhone, so it reconnects by itself whenever the iPhone comes back into range. Reports are sent strictly in order and paced to the Bluetooth connection interval. Pointer moves can be combined when the radio is busy, but clicks and keys never are. If the radio stops responding, input returns to the Mac and everything is released.
 
+When the iPhone's screen goes off, the iPhone suspends input (the HID Control Point), and MacHop sends it nothing until it resumes. With waking turned on, a push into the edge (or ⌃⌥⌘I) sends one Shift tap to wake it (the keyboard advertises remote wake).
+
 While the Mac sleeps, MacHop lets go of the iPhone completely, so the Mac's background wakes can't reconnect it; it connects again when the Mac wakes. Reconnecting never sends a pointer position (one would show the iPhone's pointer), except to release a button that might still be held.
 
 The iPhone reports its model over the same connection, which is how MacHop knows its screen shape.

@@ -172,7 +172,7 @@ struct SetupGuideView: View {
                 IconTile(symbol: "checkmark", size: 44, tint: .green)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MacHop is ready").font(.system(size: 17, weight: .semibold))
-                    Text("Move the pointer past the \(side) edge of your screen to use your iPhone. Press ⌃⌥⌘⎋ to come back at any time.")
+                    Text("Move the pointer past the \(side) edge of your screen to use your iPhone, or press ⌃⌥⌘I. Press ⌃⌥⌘⎋ to come back at any time.")
                         .font(.system(size: 13.5)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

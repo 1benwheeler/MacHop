@@ -42,7 +42,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         switch model.status {
         case .ready, .controlling:
             image = Self.mark
-        case .paused, .connecting, .waitingForPhone, .phoneLocked, .choosePhone, .blocked:
+        case .paused, .connecting, .waitingForPhone, .phoneAsleep, .choosePhone, .blocked:
             image = Self.mark
             dimmed = true
         case .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable:
@@ -75,6 +75,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             let back = add("Return to Mac", #selector(returnToMac), to: menu)
             back.keyEquivalent = "\u{1b}"
             back.keyEquivalentModifierMask = [.control, .option, .command]
+        } else if model.status == .ready || model.status == .phoneAsleep && model.settings.wakesPhone == true {
+            let jump = add("Move to \(model.phoneName)", #selector(jumpToPhone), to: menu)
+            jump.keyEquivalent = "i"
+            jump.keyEquivalentModifierMask = [.control, .option, .command]
         }
         if model.settings.phoneID != nil {
             add("Reconnect", #selector(reconnect), to: menu)
@@ -113,6 +117,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func returnToMac() { model.returnToMac() }
+    @objc private func jumpToPhone() { closeMenu { [weak self] in self?.model.jumpToPhone() } }
     @objc private func reconnect() { model.reconnect() }
     @objc private func showSettings() { actions.open() }
     @objc private func showGuide() { actions.guide() }
@@ -134,7 +139,7 @@ enum StatusText {
         case .choosePhone: "Choose Your iPhone"
         case .connecting: "Connecting to \(model.phoneName)…"
         case .waitingForPhone: "Waiting for \(model.phoneName)…"
-        case .phoneLocked: "Unlock \(model.phoneName)"
+        case .phoneAsleep: "\(model.phoneName) Is Asleep"
         case .blocked: "Input Stays on Your Mac"
         }
     }
@@ -152,7 +157,8 @@ enum StatusText {
         case .choosePhone: return "Choose your iPhone to get started."
         case .connecting: return "Keep your iPhone nearby and unlocked."
         case .waitingForPhone: return "Your iPhone is linked; waiting for it to accept the keyboard and pointer."
-        case .phoneLocked: return "Your iPhone pauses the keyboard and pointer while it's locked."
+        case .phoneAsleep:
+            return model.settings.wakesPhone == true ? "Move onto your iPhone to wake it." : "Wake your iPhone to use it."
         case .blocked(let reason): return reason
         }
     }
@@ -168,12 +174,38 @@ private struct MenuHeader: View {
             Spacer()
             Toggle("MacHop", isOn: Binding(get: { !model.settings.paused },
                                            set: { on in model.update { $0.paused = !on } }))
-                .toggleStyle(.switch)
-                .controlSize(.small)
+                .toggleStyle(MenuSwitchStyle())
                 .labelsHidden()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
+    }
+}
+
+/// The header's switch, drawn like the system one. MacHop is never the active app
+/// while its menu is open, and the system switch draws grey then, even when on; in
+/// Control Centre's menus switches are blue when on, so this one is too.
+private struct MenuSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        let on = configuration.isOn
+        Capsule()
+            .fill(on ? Color.accentColor : Color.primary.opacity(0.13))
+            .frame(width: 44, height: 20)
+            .overlay(alignment: on ? .trailing : .leading) {
+                Capsule()
+                    .fill(.white)
+                    .shadow(color: .black.opacity(0.25), radius: 0.75, y: 0.5)
+                    .frame(width: 26, height: 16)
+                    .padding(2)
+            }
+            .animation(.snappy(duration: 0.18), value: on)
+            .contentShape(Capsule())
+            .onTapGesture { configuration.isOn.toggle() }
+            .accessibilityElement()
+            .accessibilityLabel("MacHop")
+            .accessibilityAddTraits(.isToggle)
+            .accessibilityValue(on ? "On" : "Off")
+            .accessibilityAction { configuration.isOn.toggle() }
     }
 }
 
@@ -220,7 +252,7 @@ private struct MenuDeviceRow: View {
         case .ready: "Connected"
         case .paused: "MacHop is off"
         case .connecting, .waitingForPhone: "Connecting…"
-        case .phoneLocked: "Locked"
+        case .phoneAsleep: "Asleep"
         case .choosePhone: "Choose your iPhone to begin"
         case .blocked(let reason): reason
         default: StatusText.title(model)

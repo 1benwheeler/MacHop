@@ -27,6 +27,8 @@ public protocol CursorControl: AnyObject {
     func move(to point: Point)
     /// Show the cursor again, moving it to `point` first when given.
     func show(at point: Point?)
+    /// Where the cursor is now, if known.
+    var currentLocation: Point? { get }
 }
 
 public enum Owner: Equatable, Sendable {
@@ -131,6 +133,13 @@ public final class InputSession {
 
     /// Called when `entryGuard` refused a crossing.
     public var onEntryRefused: ((String) -> Void)?
+    /// Set while the only thing keeping input off the phone is that it's asleep (it
+    /// suspended input) and the user lets MacHop wake it.
+    public var mayWakePhone = false
+    /// Wakes the phone: called when you push into its edge or press ⌃⌥⌘I while it sleeps.
+    public var onWakePhone: (() -> Void)?
+    /// ⌃⌥⌘I was pressed but input can't go to the phone (and it can't be woken).
+    public var onJumpUnavailable: (() -> Void)?
     /// Runs work later on the main actor; used to release a drag-scroll whose
     /// end never arrived. Without it, strokes end only on the next event.
     public var schedule: ((Double, @escaping @MainActor () -> Void) -> Void)?
@@ -159,6 +168,11 @@ public final class InputSession {
     private var pendingJump: (offset: Point, eventsLeft: Int)?
     private var returnPressure = 0.0
     private var crossingAllowedAfter = 0.0
+    private var wakeAllowedAfter = 0.0
+    /// After ⌃⌥⌘I woke the phone: jump as soon as it accepts input, until this time.
+    private var jumpWhenReadyUntil: Double?
+    /// Where the Mac cursor was when ⌃⌥⌘I jumped to the phone; a shortcut return puts it back.
+    private var jumpOrigin: Point?
     private var scroll = ScrollConverter()
     private var keyboard = KeyboardReport.released
     private var phoneButtons: UInt8 = 0
@@ -172,6 +186,10 @@ public final class InputSession {
     /// cursor lands this far inside the screen.
     public static let exitCooldown = 0.6
     static let exitInset = 40.0
+    /// Pushing on while a woken phone comes on doesn't wake it again this soon.
+    public static let wakeInterval = 2.0
+    /// How long after ⌃⌥⌘I wakes the phone it may still jump there once it's on.
+    public static let jumpWakeWindow = 3.0
 
     public init(settings: SessionSettings, displays: [Display], link: HIDLink, cursor: CursorControl,
                 clock: @escaping () -> Double) {
@@ -197,6 +215,10 @@ public final class InputSession {
         isEnabled = enabled
         disabledReason = enabled ? "" : reason
         if !enabled { returnToMac(.unavailable(reason)) }
+        if let until = jumpWhenReadyUntil, enabled, link.isReady {
+            jumpWhenReadyUntil = nil
+            if clock() <= until { jumpToPhone() }
+        }
     }
 
     /// Modifier flags the Mac should see on events it receives. Modifiers held
@@ -272,14 +294,17 @@ public final class InputSession {
         // Release any button where it is, and leave the pointer there: iOS fades it
         // after about 15 s without movement (nothing a Bluetooth pointer sends hides it sooner).
         if let pointer = phonePointer { link.send(.pointer(pointerReport(at: pointer))) }
-        var destination = point ?? phonePointer.flatMap { pointer in
+        // A shortcut return after jumping with ⌃⌥⌘I puts the cursor back where it was.
+        let jumpedFrom = reason == .shortcut ? jumpOrigin : nil
+        jumpOrigin = nil
+        var destination = point ?? jumpedFrom ?? phonePointer.flatMap { pointer in
             screenLink.map { $0.returnPoint(phoneAlong: pointer.along($0.side)) }
         }
         // A return the user didn't make by pushing through the edge (⌃⌥⌘⎋, Bluetooth
         // dropping, …) lands a little inside the screen and holds off re-entry for
         // longer, so a hand still moving towards the phone can't carry input straight back.
         let deliberateExit = reason != .edge
-        if deliberateExit, point == nil, let link = screenLink, let landing = destination {
+        if deliberateExit, point == nil, jumpedFrom == nil, let link = screenLink, let landing = destination {
             destination = landing.offset(outward: -Self.exitInset, through: link.side)
         }
         phonePointer = nil
@@ -301,29 +326,68 @@ public final class InputSession {
     /// Used by edge crossing and by automation.
     @discardableResult
     public func enterPhone(atEdge position: Double, carry: Double = 0) -> Bool {
-        guard owner == .mac, isEnabled, link.isReady, let screenLink else { return false }
-        if let refusal = entryGuard?() {
-            crossingPressure = 0
-            crossingAllowedAfter = clock() + Self.crossingCooldown
-            onEntryRefused?(refusal)
-            return false
-        }
-        owner = .phone
+        guard owner == .mac, isEnabled, link.isReady, let screenLink, !entryRefused() else { return false }
         let side = screenLink.side
         let inset = min(2, screenLink.phoneDepth / 4)
         // Moving deeper into the phone is outward through the Mac's edge.
         let inward = min(max(0, carry) * pointerScale, screenLink.phoneDepth / 2)
         let entry = screenLink.entryPoint(macAlong: position, inset: inset).offset(outward: inward, through: side)
+        takeInput(at: entry, cursorFrom: Point(along: position, across: screenLink.edgeLine, side: side))
+        return true
+    }
+
+    /// ⌃⌥⌘I: hands input to the phone without crossing an edge, with its pointer in the
+    /// middle of the screen. The same keys, or ⌃⌥⌘⎋, put the cursor back where it was.
+    @discardableResult
+    public func jumpToPhone() -> Bool {
+        guard owner == .mac, isEnabled, link.isReady, let screenLink, !entryRefused() else { return false }
+        let display = screenLink.display
+        let origin = cursor.currentLocation ?? lastLocation
+        let from = origin ?? Point(x: display.minX + display.width / 2, y: display.midY)
+        jumpOrigin = origin
+        takeInput(at: Point(x: screenLink.phone.width / 2, y: screenLink.phone.height / 2), cursorFrom: from)
+        return true
+    }
+
+    /// Asks `entryGuard`; a refusal is reported and holds off crossing for a moment.
+    private func entryRefused() -> Bool {
+        guard let refusal = entryGuard?() else { return false }
+        crossingPressure = 0
+        crossingAllowedAfter = clock() + Self.crossingCooldown
+        onEntryRefused?(refusal)
+        return true
+    }
+
+    private func takeInput(at entry: Point, cursorFrom location: Point) {
+        guard let screenLink else { return }
+        owner = .phone
         phonePointer = entry
         crossingPressure = 0
         returnPressure = 0
         scroll.reset()
         phoneButtons = 0
         cursor.hide()
-        recentre(from: Point(along: position, across: screenLink.edgeLine, side: side), within: screenLink.display)
+        recentre(from: location, within: screenLink.display)
         link.send(.pointer(pointerReport(at: entry)))
         onOwnerChange?(.phone, nil)
-        return true
+    }
+
+    /// ⌃⌥⌘I from the Mac: jump to the phone, or wake it and jump once it's on.
+    public func jumpOrWake() {
+        if isEnabled && link.isReady {
+            jumpToPhone()
+        } else if mayWakePhone {
+            jumpWhenReadyUntil = clock() + Self.jumpWakeWindow
+            wakePhone()
+        } else {
+            onJumpUnavailable?()
+        }
+    }
+
+    private func wakePhone() {
+        guard clock() >= wakeAllowedAfter else { return }
+        wakeAllowedAfter = clock() + Self.wakeInterval
+        onWakePhone?()
     }
 
     private func pointerMoved(location: Point, delta rawDelta: Point) -> Disposition {
@@ -399,7 +463,8 @@ public final class InputSession {
     private func crossing(location: Point, delta: Point) -> Double? {
         let previous = lastMacLocation ?? Point(x: location.x - delta.x, y: location.y - delta.y)
         lastMacLocation = location
-        guard isEnabled, link.isReady, let screenLink, clock() >= crossingAllowedAfter,
+        let available = isEnabled && link.isReady
+        guard available || mayWakePhone, let screenLink, clock() >= crossingAllowedAfter,
               !buttonHolders.values.contains(.mac) else {
             crossingPressure = 0
             return nil
@@ -426,7 +491,14 @@ public final class InputSession {
         guard outward > 0, !Self.slidesAlongEdge(delta, side: side) else { return nil }
         crossingPressure += outward
         let needed = max(0.5, settings.edgeResistance, side == .top ? Self.menuBarResistance : 0)
-        return crossingPressure >= needed ? crossingPressure - needed : nil
+        guard crossingPressure >= needed else { return nil }
+        guard available else {
+            // The phone is asleep: this push wakes it, and pushing on crosses once it's on.
+            crossingPressure = 0
+            wakePhone()
+            return nil
+        }
+        return crossingPressure - needed
     }
 
     /// The least push that crosses the top edge, whatever the resistance setting:
@@ -579,6 +651,11 @@ public final class InputSession {
                 returnToMac(.shortcut)
                 return .suppress
             }
+            if isJumpShortcut(code: code, modifiers: modifiers), screenLink != nil {
+                keyHolders[code] = .swallowed
+                if owner == .phone { returnToMac(.shortcut) } else { jumpOrWake() }
+                return .suppress
+            }
             // A fresh press replaces any stale record left by a missed release.
             guard owner == .phone else {
                 keyHolders[code] = .mac
@@ -686,6 +763,11 @@ public final class InputSession {
     /// Control-Option-Command-Escape.
     private func isEmergencyShortcut(code: UInt16, modifiers: ModifierFlags) -> Bool {
         code == KeyMap.escapeKeyCode && modifiers.isSuperset(of: [.control, .option, .command])
+    }
+
+    private func isJumpShortcut(code: UInt16, modifiers: ModifierFlags) -> Bool {
+        code == KeyMap.jumpKeyCode && modifiers.isSuperset(of: [.control, .option, .command])
+            && !modifiers.contains(.shift)
     }
 
     private func scrolled(_ input: ScrollInput) -> Disposition {

@@ -116,6 +116,19 @@ public final class HIDTransport: HIDLink {
         drain()
     }
 
+    /// Asks a phone that has paused input (its screen went to sleep) to wake up. This
+    /// device advertises remote wake, which lets it send input while suspended. A tap
+    /// of Shift is the input: it types nothing and does nothing on any screen.
+    @discardableResult
+    public func wake(with reports: [HIDReport] = HIDTransport.wakeReports) -> Bool {
+        guard isSuspended, !isStalled, subscribedReports.contains(profile.keyboardReportID) else { return false }
+        for report in reports { enqueue(.report(report, transition: false)) }
+        drain()
+        return true
+    }
+
+    public static let wakeReports: [HIDReport] = [.keyboard(KeyboardReport(modifiers: 0x02)), .keyboard(.released)]
+
     /// The link to the phone is gone. Everything queued is dropped: input is
     /// never replayed after a reconnection.
     public func reset() {

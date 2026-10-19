@@ -110,7 +110,7 @@ private struct Sidebar: View {
         case .ready: "Connected"
         case .paused: "Off"
         case .connecting, .waitingForPhone: "Connecting…"
-        case .phoneLocked: "Locked"
+        case .phoneAsleep: "Asleep"
         case .choosePhone: "Not set up"
         case .blocked: "On hold"
         default: "Needs attention"
@@ -447,15 +447,21 @@ private struct SettingsPage: View {
                         .toggleStyle(.switch).labelsHidden()
                 }
                 RowDivider()
+                SettingRow(symbol: "moon.zzz", title: "Wake your iPhone when you move onto it",
+                           detail: "When this is off, a sleeping iPhone stays asleep until you wake it.") {
+                    Toggle("Wake your iPhone", isOn: Binding(get: { model.settings.wakesPhone == true },
+                                                             set: { on in model.update { $0.wakesPhone = on } }))
+                        .toggleStyle(.switch).labelsHidden()
+                }
+                RowDivider()
                 SettingRow(symbol: "speaker.wave.2", title: "Volume and media keys control iPhone",
                            detail: "While you're on your iPhone, the volume, mute and play keys control it instead of this Mac.") {
                     Toggle("Media keys", isOn: model.binding(\.session.mediaKeysToPhone)).toggleStyle(.switch).labelsHidden()
                 }
                 RowDivider()
-                SettingRow(symbol: "escape", title: "Return to your Mac at any time") {
-                    Text("⌃⌥⌘⎋").font(.system(size: 14, weight: .medium)).monospaced()
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(Theme.tile, in: RoundedRectangle(cornerRadius: 7))
+                SettingRow(symbol: "arrow.left.arrow.right", title: "Jump to your iPhone and back",
+                           detail: "Press ⌃⌥⌘⎋ to return to your Mac at any time.") {
+                    KeyCaps(keys: "⌃⌥⌘I")
                 }
                 if !model.accessibilityGranted {
                     RowDivider()
@@ -482,6 +488,17 @@ private struct SettingsPage: View {
                 }
             }
         }
+    }
+}
+
+/// A keyboard shortcut, shown as a key cap.
+private struct KeyCaps: View {
+    let keys: String
+
+    var body: some View {
+        Text(keys).font(.system(size: 14, weight: .medium)).monospaced()
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Theme.tile, in: RoundedRectangle(cornerRadius: 7))
     }
 }
 

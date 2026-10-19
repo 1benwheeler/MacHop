@@ -15,8 +15,8 @@ final class AppModel {
         case choosePhone
         case connecting
         case waitingForPhone
-        /// Linked and subscribed, but the iPhone has paused input (it's locked or asleep).
-        case phoneLocked
+        /// Linked and subscribed, but the iPhone has paused input: its screen is off.
+        case phoneAsleep
         case ready
         case controlling
         case paused
@@ -146,6 +146,18 @@ final class AppModel {
             return nil
         }
         session.onEntryRefused = { [weak self] reason in self?.show(notice: reason) }
+        session.onWakePhone = { [weak self] in
+            if self?.transport.wake() == true { Log.bluetooth.notice("Waking the iPhone") }
+        }
+        session.onJumpUnavailable = { [weak self] in
+            guard let self else { return }
+            NSSound.beep()
+            switch status {
+            case .phoneAsleep: show(notice: "\(phoneName) is asleep. Wake it to move onto it.")
+            case .blocked(let reason): show(notice: reason)
+            default: show(notice: "\(phoneName) isn't connected yet.")
+            }
+        }
         if AutomationServer.isEnabled {
             // Lab only: scroll amounts and the wheel steps sent, to study how scrolling feels.
             session.onScrollTrace = { input, report in
@@ -204,13 +216,15 @@ final class AppModel {
         phoneReady = transport.isReady
         subscriptions = transport.subscribedReports.count
         stats = transport.stats
-        let reason: String? =
+        let blocker: String? =
             settings.paused ? "Paused" :
             !accessibilityGranted ? "MacHop needs Accessibility permission" :
             !tap.isRunning ? "Input capture is unavailable" :
-            monitor.blockingReason ??
-            (transport.isReady ? nil : "iPhone is not connected") ??
-            (session.screenLink == nil ? "Check the arrangement" : nil)
+            monitor.blockingReason
+        let arrangement: String? = session.screenLink == nil ? "Check the arrangement" : nil
+        let reason = blocker ?? (transport.isReady ? nil : "iPhone is not connected") ?? arrangement
+        // Waking is only offered when the iPhone being asleep is all that's in the way.
+        session.mayWakePhone = settings.wakesPhone == true && transport.isSuspended && blocker == nil && arrangement == nil
         session.setEnabled(reason == nil, reason: reason ?? "")
         if transport.isReady { linkAttempts = 0 }
         watchLink()
@@ -230,7 +244,7 @@ final class AppModel {
         if settings.phoneID == nil && !phoneReady { return .choosePhone }
         if let reason = monitor.blockingReason { return .blocked(reason) }
         if phoneReady { return session.screenLink == nil ? .blocked("Check the arrangement in Settings.") : .ready }
-        if link == .connected && transport.isSuspended { return .phoneLocked }
+        if link == .connected && transport.isSuspended { return .phoneAsleep }
         return link == .connected ? .waitingForPhone : .connecting
     }
 
@@ -472,6 +486,9 @@ final class AppModel {
     }
 
     func returnToMac() { session.returnToMac(.requested) }
+
+    /// The menu's Move to iPhone: what ⌃⌥⌘I does.
+    func jumpToPhone() { session.jumpOrWake() }
 
     func choose(_ device: NearbyDevice) {
         connector.stopSearch()

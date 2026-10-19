@@ -81,14 +81,31 @@ public final class SimulatedRadio: NotificationSink {
             let next = buffer.removeFirst()
             maximumLatency = max(maximumLatency, scheduler.now - next.queuedAt)
             deliveryLog.append((scheduler.now, next.reportID, next.bytes))
-            phone.receive(reportID: next.reportID, bytes: next.bytes)
             delivered += 1
+            if screenAsleep {
+                screenAsleep = false
+                wakes += 1
+                scheduler.after(wakeDelay) { [weak self] in self?.transport?.setSuspended(false) }
+                continue
+            }
+            phone.receive(reportID: next.reportID, bytes: next.bytes)
         }
         if owesReadyCallback && buffer.count < capacity {
             owesReadyCallback = false
             transport?.radioIsReady()
         }
         if !buffer.isEmpty { scheduleEvent() }
+    }
+
+    /// The phone's screen is asleep, so it has suspended input. A report that arrives
+    /// anyway wakes it instead of acting (remote wake), and input resumes after `wakeDelay`.
+    public private(set) var screenAsleep = false
+    public var wakeDelay = 0.4
+    public private(set) var wakes = 0
+
+    public func sleepScreen() {
+        screenAsleep = true
+        transport?.setSuspended(true)
     }
 
     /// The phone disappears: in-flight notifications are lost.
@@ -128,6 +145,7 @@ public final class VirtualCursor: CursorControl {
     /// How often the session asked the cursor to stay hidden.
     public private(set) var keepHiddenRequests = 0
     public func keepHidden() { keepHiddenRequests += 1 }
+    public var currentLocation: Point? { location }
 
     public func move(to point: Point) { warp(to: point) }
 

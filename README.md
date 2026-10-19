@@ -17,6 +17,7 @@
 ## What it does
 
 - **Move across:** push the pointer off the edge of your screen and it carries on, on your iPhone. Come back the same way, or press ⌃⌥⌘⎋ at any time.
+- **Or jump:** press ⌃⌥⌘I to go to your iPhone without moving the pointer, and again to come back to where you were.
 - **Click, type and drag** on the iPhone with your Mac's trackpad, mouse and keyboard.
 - **iPad-style gestures:** swipe up with three fingers for Home, swipe up and hold for the App Switcher, swipe down for Notification Centre.
 - **Feels native:** fast flicks carry across the edge, and Mac gestures such as Mission Control stay quiet while you're on the iPhone.
@@ -77,6 +78,9 @@ MacHop lives in your menu bar. Its menu has a switch to turn it off and on, your
 - **Match the drawing to your iPhone:** drag it to the side or top of your screen where it really sits, and choose Portrait or Landscape. If the Dynamic Island is on the other side from the drawing's, click **Flip**, or the pointer will move the wrong way on the iPhone.
 - **Two-finger scrolling:** choose how it works on the Scrolling page. **Drag** (the default) scrolls smoothly, like a finger, with the iPhone's own momentum; the pointer moves with the page, as it does when you click and drag. **Scroll wheel** keeps the pointer still, but iPhone moves the page in small steps. Or turn it off and drag by hand.
 - **Volume and media keys** stay with your Mac unless you choose to send them to the iPhone (Settings).
+- **A sleeping iPhone stays asleep:** MacHop waits until you wake it. To wake it as you move across instead, turn on **Wake your iPhone when you move onto it** in Settings.
+- **Symbols come out wrong?** Set the iPhone's layout to match your Mac's keyboard, for example British for a UK keyboard: on the iPhone, **Settings → General → Keyboard → Hardware Keyboard**.
+- **Copy and paste** between them with Apple's Universal Clipboard: copy on one and paste on the other. It works separately from MacHop and needs Handoff on in both.
 - **Pointer speed** and **edge resistance** are on the My iPhone page; the defaults suit most people.
 
 ## Limitations
@@ -105,6 +109,14 @@ Use Apple's Universal Control for iPad; it's built in.
 ### Why does my iPhone need AssistiveTouch?
 
 That's how iPhone supports a pointer from a Bluetooth mouse; MacHop appears to the iPhone as exactly that.
+
+### Can I drag files across?
+
+No. To your iPhone, MacHop is a keyboard and a pointer, and those can't carry files. Use AirDrop, or copy and paste small things with Universal Clipboard.
+
+### Copy and paste doesn't work
+
+Universal Clipboard is Apple's, not MacHop's. Check that Handoff is on (Mac: **System Settings → General → AirDrop & Handoff**; iPhone: **Settings → General → AirPlay & Continuity**), that both are on the same Apple Account with Wi-Fi and Bluetooth on, and paste within a couple of minutes of copying.
 
 ## More
 

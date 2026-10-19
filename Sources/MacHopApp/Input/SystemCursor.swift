@@ -21,6 +21,10 @@ final class SystemCursor: CursorControl {
         BackgroundCursorPermission.enable()
     }
 
+    var currentLocation: Point? {
+        CGEvent(source: nil).map { Point(x: $0.location.x, y: $0.location.y) }
+    }
+
     func hide() {
         if !hidden { hidden = CGDisplayHideCursor(CGMainDisplayID()) == .success }
         lastCheck = 0
