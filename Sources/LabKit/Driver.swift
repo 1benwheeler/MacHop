@@ -54,6 +54,19 @@ public final class Driver {
         return owner == "phone"
     }
 
+    /// Pushes into the middle of the shared edge through MacHop's session (as the round
+    /// trips do; the real cursor stays put) and returns who has input afterwards.
+    public func push(times: Int = 12) throws -> String {
+        let edge = try edge()
+        let at = edge.point(along: (edge.start + edge.end) / 2, inside: 0)
+        let push = edge.delta(outward: 2)
+        for _ in 0..<times {
+            try app.send(["cmd": "move", "x": at.x, "y": at.y, "dx": push.dx, "dy": push.dy])
+            Thread.sleep(forTimeInterval: 0.008)
+        }
+        return owner
+    }
+
     /// Move back through the phone's edge facing the Mac.
     public func back() throws -> Bool {
         let inward = try edge().delta(outward: -40)

@@ -151,12 +151,36 @@ case "look":
     print(macScreenshot("\(directory)/mac.png") ? "Saved \(directory)/iphone.png and \(directory)/mac.png"
           : "Saved \(directory)/iphone.png; Mac screenshot needs Screen Recording permission for MacHop Lab")
 
+case "push":
+    // Pushes into the middle of the shared edge through MacHop's session, as the round
+    // trips do, twice with a pause between, and reports who has input. With waking on and
+    // the iPhone asleep, the first push should wake it and the second cross.
+    let driver = Driver(app: connectApp())
+    do {
+        for round in 1...2 {
+            let owner = try driver.push()
+            print("push \(round): input with \(owner), suspended \(try driver.status()["suspended"] ?? "?")")
+            if owner == "phone" { break }
+            Thread.sleep(forTimeInterval: 1.5)
+        }
+    } catch { fail("\(error)") }
+
 case "cross", "back", "goto", "click", "keys", "twofinger":
     let app = connectApp()
-    requireReady(app)
+    // `cross --asleep`: the iPhone is asleep and MacHop may wake it, so don't require input yet.
+    let asleep = command == "cross" && arguments.contains("--asleep")
+    if !asleep { requireReady(app) }
     do {
         let driver = Driver(app: app)
         switch command {
+        case "cross" where asleep:
+            // The first push should wake the iPhone; pushing again once it's on should cross.
+            if try driver.cross() {
+                print("On the iPhone at the first push")
+            } else {
+                Thread.sleep(forTimeInterval: 1.5)
+                print(try driver.cross() ? "On the iPhone at the second push" : "Did not cross")
+            }
         case "cross": print(try driver.cross() ? "On the iPhone" : "Did not cross")
         case "back": print(try driver.back() ? "Back on the Mac" : "Did not return")
         case "goto":
