@@ -459,10 +459,12 @@ final class AppModel {
         settings.paused = false
         settings.gestureSetup = nil
         // The standard arrangement, so screenshots don't depend on this Mac's settings:
-        // portrait on the right, or with `--demo-top`, landscape above the screen.
+        // portrait on the right; with `--demo-top`, landscape above the screen; with
+        // `--demo-bottom`, portrait below it.
         let top = CommandLine.arguments.contains("--demo-top")
-        settings.session.layout.side = top ? .top : .right
-        settings.session.layout.edgePosition = top ? 0.7 : 0.5
+        let bottom = CommandLine.arguments.contains("--demo-bottom")
+        settings.session.layout.side = top ? .top : bottom ? .bottom : .right
+        settings.session.layout.edgePosition = top || bottom ? 0.7 : 0.5
         settings.session.layout.orientation = top ? .landscape : .portrait
         settings.session.layout.flipped = false
     }

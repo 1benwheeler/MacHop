@@ -2,9 +2,9 @@
 import SwiftUI
 import MacHopCore
 
-/// A drawing of the Mac's displays with the iPhone beside or above the chosen one, as
-/// MacHop arranges them. With `onArrange`, the iPhone can be dragged to any exposed
-/// side or top edge, like the display arrangement in System Settings.
+/// A drawing of the Mac's displays with the iPhone beside, above or below the chosen
+/// one, as MacHop arranges them. With `onArrange`, the iPhone can be dragged to any
+/// exposed edge, like the display arrangement in System Settings.
 struct DeviceStage: View {
     enum Status: Equatable { case offline, ready, controlling }
 
@@ -45,9 +45,17 @@ struct DeviceStage: View {
     }
 
     /// The phone as drawn: a few points clear of the Mac, like real devices side by side.
+    /// Below a screen it also clears the MacBook's base or the monitor's stand.
     private func placedPhone(_ link: ScreenLink, map: StageMap) -> CGRect {
-        let gap = Point.zero.offset(outward: Self.gap, through: link.side)
+        let builtIn = displays.first { $0.frame == link.display }.map { CGDisplayIsBuiltin($0.id) != 0 } ?? false
+        let footing = link.side == .bottom ? Self.footing(below: map.view(link.display), builtIn: builtIn) : 0
+        let gap = Point.zero.offset(outward: Self.gap + footing, through: link.side)
         return map.view(link.phone).offsetBy(dx: gap.x, dy: gap.y)
+    }
+
+    /// How far a MacBook's base or a monitor's stand reaches below its screen, as drawn.
+    private static func footing(below rect: CGRect, builtIn: Bool) -> CGFloat {
+        builtIn ? max(4, rect.height * 0.045) - 1 : rect.height * 0.1 + max(3, rect.height * 0.025) - 1
     }
 
     private static let gap = 7.0
@@ -132,7 +140,7 @@ struct DeviceStage: View {
             startPoint: CGPoint(x: rect.midX, y: rect.maxY), endPoint: CGPoint(x: rect.midX, y: rect.maxY + rect.height * 0.08))
         if builtIn {
             // Base: a little wider than the lid, with the opening notch.
-            let height = max(4, rect.height * 0.045)
+            let height = Self.footing(below: rect, builtIn: true) + 1
             let base = CGRect(x: rect.minX - rect.width * 0.055, y: rect.maxY - 1, width: rect.width * 1.11, height: height)
             context.fill(Path(roundedRect: base, cornerRadii: RectangleCornerRadii(topLeading: 1, bottomLeading: height * 0.7,
                                                                                     bottomTrailing: height * 0.7, topTrailing: 1)),
@@ -214,7 +222,8 @@ struct StatusPill: View {
 }
 
 /// Maps global display coordinates to the stage and back. The frame leaves room for
-/// the iPhone beside and above every display, so it stays put while the iPhone moves.
+/// the iPhone beside and above every display, so it stays put while the iPhone moves,
+/// and below once it's there.
 private struct StageMap {
     let size: CGSize
     let origin: Point
@@ -229,7 +238,8 @@ private struct StageMap {
         // Above: room for a landscape iPhone (or the iPhone as it is, when it's already there).
         let landscapeHeight = layout.size * layout.aspectRatio
         let above = max(phone.height * 0.35, (layout.side == .top ? phone.height : landscapeHeight) + 16)
-        let below = phone.height * 0.35
+        // Below: the iPhone and the stand it sits clear of, once it's there.
+        let below = layout.side == .bottom ? phone.height + union.height * 0.13 + 16 : phone.height * 0.35
         let room = MacHopCore.Rect(x: union.minX - phone.width - 16, y: union.minY - above,
                                    width: union.width + 2 * (phone.width + 16), height: union.height + above + below)
         let pad = 10.0

@@ -279,6 +279,32 @@ struct ScrollConverterTests {
         #expect(side.side == .right)
     }
 
+    // MARK: Bottom edge
+
+    @Test("An iPhone below the screen shares the bottom edge, with the same margins")
+    func bottomEdge() throws {
+        let main = Display(id: 1, frame: Rect(x: 0, y: 0, width: 1512, height: 982))
+        let layout = PhoneLayout(displayID: 1, side: .bottom, edgePosition: 0.75)
+        let link = try #require(ScreenLink(layout: layout, displays: [main]))
+        #expect(link.phone.minY == 982 && abs(link.phone.midX - 1134) < 0.5)
+        #expect(link.phone.height > link.phone.width, "portrait, standing below the screen")
+        #expect(link.edgeLine == 981)
+        #expect(link.openSpans == [link.phone.minX...link.phone.maxX])
+        #expect(!link.isOpen(along: 1512 - ScreenLink.cornerGuard + 1), "the bottom-right hot corner")
+        #expect(link.returnPoint(phoneAlong: 50) == Point(x: link.phone.minX + 50, y: 981))
+        #expect(link.entryPoint(macAlong: 1100, inset: 2) == Point(x: 1100 - link.phone.minX, y: 2))
+    }
+
+    @Test("Dropping the iPhone below a display puts it on the bottom edge; a display below covers it")
+    func snapToBottom() throws {
+        let main = Display(id: 1, frame: Rect(x: 0, y: 0, width: 1512, height: 982))
+        let base = PhoneLayout(displayID: 1)
+        let bottom = try #require(ScreenLink.snappedLayout(centre: Point(x: 600, y: 1300), base: base, displays: [main]))
+        #expect(bottom.side == .bottom && abs(bottom.edgePosition - 600.0 / 1512) < 0.001)
+        let below = Display(id: 2, frame: Rect(x: -100, y: 982, width: 1800, height: 1000))
+        #expect(ScreenLink(layout: PhoneLayout(displayID: 1, side: .bottom), displays: [main, below]) == nil)
+    }
+
     // MARK: Orientation
 
     @Test("The Dynamic Island's end of the phone, as drawn, is the top of the iPhone's own screen")

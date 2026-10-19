@@ -252,8 +252,11 @@ private struct PhonePage: View {
     private var arrangementDescription: String {
         let layout = model.settings.session.layout
         let percent = Int(layout.edgePosition * 100)
-        return layout.side == .top ? "iPhone above the screen, \(percent) percent of the way across"
-            : "iPhone on the \(layout.side.rawValue) of the screen, \(percent) percent of the way down"
+        switch layout.side {
+        case .top: return "iPhone above the screen, \(percent) percent of the way across"
+        case .bottom: return "iPhone below the screen, \(percent) percent of the way across"
+        case .left, .right: return "iPhone on the \(layout.side.rawValue) of the screen, \(percent) percent of the way down"
+        }
     }
 
     @ViewBuilder private var primaryActions: some View {

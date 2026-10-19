@@ -119,14 +119,14 @@ struct LabEdge {
         (self.line, self.start, self.end, self.side) = (line, start, end, side)
     }
 
-    var outward: Double { side == "right" ? 1 : -1 }
+    var outward: Double { side == "right" || side == "bottom" ? 1 : -1 }
 
     /// True when MacHop's iPhone is upright portrait, so the lab's screen readings line up with the pointer.
     static func isUpright(status: [String: Any]) -> Bool {
         let layout = status["layout"] as? [String: Any]
         return (layout?["orientation"] as? String) == "portrait" && (layout?["flipped"] as? Bool) == false
     }
-    var horizontal: Bool { side == "top" }
+    var horizontal: Bool { side == "top" || side == "bottom" }
 
     /// The Mac point `along` the edge, `inside` points in from it.
     func point(along: Double, inside: Double) -> (x: Double, y: Double) {

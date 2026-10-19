@@ -485,12 +485,13 @@ public final class InputSession {
             return nil
         }
         if push < 0 { crossingPressure = 0 }
-        // The menu bar is a target people fling the pointer at, so at the top edge the
-        // movement that arrives there doesn't count: only pushing on once there does.
-        if side == .top, abs(previous.across(side) - line) > 0.5 { outward = 0 }
+        // The menu bar and the Dock are targets people fling the pointer at, so at the top
+        // and bottom edges the movement that arrives there doesn't count: only pushing on
+        // once there does.
+        if side.isHorizontal, abs(previous.across(side) - line) > 0.5 { outward = 0 }
         guard outward > 0, !Self.slidesAlongEdge(delta, side: side) else { return nil }
         crossingPressure += outward
-        let needed = max(0.5, settings.edgeResistance, side == .top ? Self.menuBarResistance : 0)
+        let needed = max(0.5, settings.edgeResistance, side.isHorizontal ? Self.menuBarResistance : 0)
         guard crossingPressure >= needed else { return nil }
         guard available else {
             // The phone is asleep: this push wakes it, and pushing on crosses once it's on.
@@ -501,8 +502,9 @@ public final class InputSession {
         return crossingPressure - needed
     }
 
-    /// The least push that crosses the top edge, whatever the resistance setting:
-    /// the menu bar is there, and reaching for it shouldn't land on the iPhone.
+    /// The least push that crosses the top or bottom edge, whatever the resistance
+    /// setting: the menu bar and the Dock are there, and reaching for them shouldn't
+    /// land on the iPhone.
     public static let menuBarResistance = 18.0
 
     /// Motion that is mostly along an edge slides along it instead of pushing

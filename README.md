@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/my-iphone.png" width="760" alt="MacHop's window: drag your iPhone to where it sits beside or above your screen">
+  <img src="docs/images/my-iphone.png" width="760" alt="MacHop's window: drag your iPhone to where it sits beside, above or below your screen">
 </p>
 
 ## What it does
@@ -21,7 +21,7 @@
 - **Click, type and drag** on the iPhone with your Mac's trackpad, mouse and keyboard.
 - **iPad-style gestures:** swipe up with three fingers for Home, swipe up and hold for the App Switcher, swipe down for Notification Centre.
 - **Feels native:** fast flicks carry across the edge, and Mac gestures such as Mission Control stay quiet while you're on the iPhone.
-- **Set up visually:** drag your iPhone to where it sits, beside or above any display, in portrait or landscape. MacHop recognises your iPhone model and sizes it to match.
+- **Set up visually:** drag your iPhone to where it sits, beside, above or below any display, in portrait or landscape. MacHop recognises your iPhone model and sizes it to match.
 - **Recovers by itself:** if the iPhone goes out of range or Bluetooth drops, control returns to your Mac instantly and MacHop reconnects when it can.
 
 Apple's Universal Control doesn't support iPhone ([why not](#why-not-just-use-universal-control)). MacHop presents your Mac to the iPhone as a Bluetooth keyboard and pointer, which the iPhone uses through its built-in AssistiveTouch.
@@ -75,7 +75,7 @@ MacHop lives in your menu bar. Its menu has a switch to turn it off and on, your
   <img src="docs/images/menu.png" width="320" alt="The menu-bar menu">
 </p>
 
-- **Match the drawing to your iPhone:** drag it to the side or top of your screen where it really sits, and choose Portrait or Landscape. If the Dynamic Island is on the other side from the drawing's, click **Flip**, or the pointer will move the wrong way on the iPhone.
+- **Match the drawing to your iPhone:** drag it to the side, top or bottom of your screen where it really sits, and choose Portrait or Landscape. If the Dynamic Island is on the other side from the drawing's, click **Flip**, or the pointer will move the wrong way on the iPhone.
 - **Two-finger scrolling:** choose how it works on the Scrolling page. **Drag** (the default) scrolls smoothly, like a finger, with the iPhone's own momentum; the pointer moves with the page, as it does when you click and drag. **Scroll wheel** keeps the pointer still, but iPhone moves the page in small steps. Or turn it off and drag by hand.
 - **Volume and media keys** stay with your Mac unless you choose to send them to the iPhone (Settings).
 - **A sleeping iPhone stays asleep:** MacHop waits until you wake it. To wake it as you move across instead, turn on **Wake your iPhone when you move onto it** in Settings.
@@ -88,7 +88,6 @@ MacHop lives in your menu bar. Its menu has a switch to turn it off and on, your
 - The pointer on the iPhone is AssistiveTouch's grey circle. iOS draws it and fades it about 15 seconds after you stop moving it; it can't be hidden sooner.
 - The App Switcher and Notification Centre gestures need a one-time AssistiveTouch setup, and pinch to zoom isn't possible: iPhone ignores touch input from Bluetooth devices.
 - iPhone can't scroll smoothly with the pointer standing still: a scroll wheel moves the page in steps, which is why Drag is the default.
-- The iPhone sits to the left or right of a display, or above it. Below is planned.
 - While a password field on your Mac uses Secure Input, or Mission Control is open, MacHop won't hand input to the iPhone.
 - Hiding the Mac's pointer uses a private macOS feature that keyboard-and-mouse sharing tools rely on. A future macOS could change it, and it rules out the Mac App Store.
 

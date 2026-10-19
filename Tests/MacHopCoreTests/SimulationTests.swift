@@ -112,7 +112,7 @@ struct SimulationTests {
             guard let link = sim.session.screenLink else { continue }
             layoutsTested += 1
             sidesTested.insert(side)
-            let resistance = max(settings.edgeResistance, side == .top ? InputSession.menuBarResistance : 0)
+            let resistance = max(settings.edgeResistance, side.isHorizontal ? InputSession.menuBarResistance : 0)
             for trip in 0..<50 {
                 let context = "layout \(layoutIndex) (\(side)) trip \(trip)"
                 let span = link.openSpans.randomElement(using: &random)!

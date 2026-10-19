@@ -78,13 +78,13 @@ public struct Display: Equatable, Hashable, Sendable, Identifiable {
 
 /// The display edge the iPhone sits against.
 public enum Side: String, Codable, Sendable, CaseIterable {
-    case left, right, top
+    case left, right, top, bottom
 
     /// +1 when moving outward through this side increases the coordinate across
-    /// the edge (x beside the screen, y above it); -1 when it decreases it.
-    public var outward: Double { self == .right ? 1 : -1 }
-    /// True for the top edge, which runs left to right.
-    public var isHorizontal: Bool { self == .top }
+    /// the edge (x beside the screen, y above or below it); -1 when it decreases it.
+    public var outward: Double { self == .right || self == .bottom ? 1 : -1 }
+    /// True for the top and bottom edges, which run left to right.
+    public var isHorizontal: Bool { self == .top || self == .bottom }
 }
 
 public enum Orientation: String, Codable, Sendable, CaseIterable {

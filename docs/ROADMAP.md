@@ -2,7 +2,6 @@
 
 ## Next
 
-- **iPhone below the screen.** Today the iPhone sits to the left, right or top of a display. Below suits desktop Macs, where the phone often lies on the desk in front of the monitor. It needs care around the Dock, which already uses that edge.
 - **iMac drawing.** An iMac's built-in screen is currently drawn as a MacBook.
 
 ## Ideas

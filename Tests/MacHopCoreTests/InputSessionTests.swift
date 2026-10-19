@@ -244,6 +244,49 @@ struct InputSessionTests {
         #expect(sim.phone.pointer.y < before.y - 20, "left on the Mac is towards the Dynamic Island")
     }
 
+    // MARK: iPhone below the screen
+
+    /// A portrait iPhone below the default 1512 × 982 display, towards its right.
+    private func phoneBelow(resistance: Double = 6) -> Simulation {
+        Simulation(settings: SessionSettings(layout: PhoneLayout(displayID: 1, side: .bottom, edgePosition: 0.7),
+                                             edgeResistance: resistance))
+    }
+
+    @Test("An iPhone below the screen: push down to cross, come back up at the matching place")
+    func phoneBelowRoundTrip() throws {
+        let sim = phoneBelow()
+        let link = try #require(sim.session.screenLink)
+        let x = link.phone.midX
+        sim.move(dx: x - sim.cursor.location.x, dy: 800 - sim.cursor.location.y, step: 40)
+        sim.move(dx: 0, dy: 400, step: 4, stopOnOwnerChange: true)
+        #expect(sim.session.owner == .phone)
+        let entry = try #require(sim.session.phonePointer)
+        #expect(abs(link.phone.minX + entry.x - x) < 1, "enters at the same x")
+        #expect(entry.y < 5, "on the phone's top edge, facing the Mac")
+        sim.settle()
+        #expect(sim.phone.pointer.y < 10, "at the top of the iPhone's screen")
+        sim.move(dx: -40, dy: 200, step: 5)
+        let phoneX = try #require(sim.session.phonePointer?.x)
+        sim.move(dx: 0, dy: -(link.phone.height + 100), step: 4, stopOnOwnerChange: true)
+        #expect(sim.session.owner == .mac)
+        #expect(abs(sim.cursor.location.x - (link.phone.minX + phoneX)) <= 1)
+        #expect(sim.cursor.location.y > 970, "lands at the bottom of the screen")
+    }
+
+    @Test("Flinging the pointer at the Dock doesn't land on an iPhone below; pushing on does")
+    func dockFlingStaysOnMac() throws {
+        let sim = phoneBelow(resistance: 0)
+        let link = try #require(sim.session.screenLink)
+        sim.move(dx: link.phone.midX - sim.cursor.location.x, dy: 400 - sim.cursor.location.y, step: 40)
+        sim.move(dx: 0, dy: 900, step: 900)
+        #expect(sim.cursor.location.y == 981)
+        #expect(sim.session.owner == .mac, "arriving movement doesn't count at the bottom")
+        sim.move(dx: 0, dy: InputSession.menuBarResistance - 2, step: 2)
+        #expect(sim.session.owner == .mac)
+        sim.move(dx: 0, dy: 4, step: 2)
+        #expect(sim.session.owner == .phone)
+    }
+
     // MARK: The home indicator, with wheel scrolling
 
     /// On the iPhone (right of the default display), pointer at the bottom of its screen.
