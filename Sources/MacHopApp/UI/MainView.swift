@@ -489,27 +489,31 @@ private struct SettingsPage: View {
                 }
                 RowDivider()
                 SettingRow(symbol: "chart.bar", title: "Diagnostics",
-                           detail: "\(model.subscriptions) input reports subscribed · \(model.stats.submitted) sent, \(model.stats.coalesced) coalesced · \(model.stats.backpressureEvents) backpressure, \(model.stats.stalls) stalls") {
-                    CopyDiagnosticsButton(model: model)
+                           detail: "For bug reports. Never includes names, keys or anything you type.") {
+                    DiagnosticsButtons(model: model)
                 }
             }
         }
     }
 }
 
-/// Copies the diagnostics report (no names, keys or text) for a bug report, and says so.
-private struct CopyDiagnosticsButton: View {
+/// Copy the diagnostics report (no names, keys or text), or copy it and open a new GitHub issue.
+private struct DiagnosticsButtons: View {
     let model: AppModel
     @State private var copied = false
 
     var body: some View {
-        Button(copied ? "Copied" : "Copy") {
-            Diagnostics.copy(model)
-            copied = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
+        HStack(spacing: 8) {
+            Button(copied ? "Copied" : "Copy") {
+                Diagnostics.copy(model)
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
+            }
+            .help("Copies MacHop's versions, connection state and settings, to paste into a bug report. " +
+                  "It never includes names, keys or anything you've typed.")
+            Button("Report an Issue…") { Diagnostics.reportIssue(model) }
+                .help("Copies the report and opens a new issue on GitHub, ready for you to paste it.")
         }
-        .help("Copies MacHop's versions, connection state and settings, to paste into a bug report. " +
-              "It never includes names, keys or anything you've typed.")
     }
 }
 

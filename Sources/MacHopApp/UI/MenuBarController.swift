@@ -71,24 +71,32 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 .padding(.horizontal, 14).padding(.bottom, 4)))
         }
         menu.addItem(.separator())
+        // Day to day the menu stays short; Reconnect and the setup guide appear only when
+        // they're useful (the guide is always in the window's sidebar).
+        var actions = 0
         if model.owner == .phone {
             let back = add("Return to Mac", #selector(returnToMac), to: menu)
             back.keyEquivalent = "\u{1b}"
             back.keyEquivalentModifierMask = [.control, .option, .command]
+            actions += 1
         } else if model.status == .ready || model.status == .phoneAsleep && model.settings.wakesPhone == true {
             let jump = add("Move to \(model.phoneName)", #selector(jumpToPhone), to: menu)
             jump.keyEquivalent = "i"
             jump.keyEquivalentModifierMask = [.control, .option, .command]
+            actions += 1
         }
-        if model.settings.phoneID != nil {
+        if model.settings.phoneID != nil, model.status == .connecting || model.status == .waitingForPhone {
             add("Reconnect", #selector(reconnect), to: menu)
+            actions += 1
         }
-        if model.owner == .phone || model.settings.phoneID != nil { menu.addItem(.separator()) }
+        if model.settings.needsSetup {
+            add("Setup Guide…", #selector(showGuide), to: menu)
+            actions += 1
+        }
+        if actions > 0 { menu.addItem(.separator()) }
         add("MacHop Settings…", #selector(showSettings), key: ",", to: menu)
-        add("Setup Guide…", #selector(showGuide), to: menu)
         add("Check for Updates…", #selector(checkForUpdates), to: menu)
         menu.addItem(.separator())
-        add("Report an Issue…", #selector(reportIssue), to: menu)
         add("About MacHop", #selector(showAbout), to: menu)
         add("Quit MacHop", #selector(quit), key: "q", to: menu)
     }
@@ -129,27 +137,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         NSWorkspace.shared.open(URL(string: "https://github.com/1benwheeler/MacHop/releases/latest")!)
     }
 
-    /// Copies the diagnostics report and opens a new GitHub issue with a short template.
-    /// The report goes on the clipboard, not in the address, so nothing leaves the Mac
-    /// unless the user pastes it and submits.
-    @objc private func reportIssue() {
-        Diagnostics.copy(model)
-        var issue = URLComponents(string: "https://github.com/1benwheeler/MacHop/issues/new")!
-        issue.queryItems = [URLQueryItem(name: "body", value: Self.issueTemplate)]
-        if let url = issue.url { NSWorkspace.shared.open(url) }
-    }
 
-    private static let issueTemplate = """
-        **What happened?**
-
-
-        **What did you expect to happen?**
-
-
-        **Diagnostics**
-        MacHop has copied them to your clipboard: paste them below. They never include names, keys or anything you've typed.
-
-        """
     @objc private func quit() { NSApp.terminate(nil) }
 }
 
@@ -296,8 +284,8 @@ extension MenuBarController {
             Divider().padding(.vertical, 5).padding(.horizontal, 14)
             MenuDeviceRow(model: model) {}
             Divider().padding(.vertical, 5).padding(.horizontal, 14)
-            ForEach(["Reconnect", "MacHop Settings…", "Setup Guide…", "Check for Updates…", "Report an Issue…",
-                     "About MacHop", "Quit MacHop"], id: \.self) { title in
+            ForEach(["Move to \(model.phoneName)", "MacHop Settings…", "Check for Updates…", "About MacHop", "Quit MacHop"],
+                    id: \.self) { title in
                 Text(title).font(.system(size: 13)).padding(.horizontal, 14).padding(.vertical, 3.5)
             }
         }

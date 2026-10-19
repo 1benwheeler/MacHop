@@ -27,6 +27,28 @@ enum Diagnostics {
         NSPasteboard.general.setString(report(model), forType: .string)
     }
 
+    /// Copies the report and opens a new GitHub issue with a short template. The report
+    /// goes on the clipboard, never in the address, so nothing leaves the Mac unless the
+    /// user pastes it and submits.
+    static func reportIssue(_ model: AppModel) {
+        copy(model)
+        var issue = URLComponents(string: "https://github.com/1benwheeler/MacHop/issues/new")!
+        issue.queryItems = [URLQueryItem(name: "body", value: issueTemplate)]
+        if let url = issue.url { NSWorkspace.shared.open(url) }
+    }
+
+    private static let issueTemplate = """
+        **What happened?**
+
+
+        **What did you expect to happen?**
+
+
+        **Diagnostics**
+        MacHop has copied them to your clipboard: paste them below. They never include names, keys or anything you've typed.
+
+        """
+
     static func report(_ model: AppModel) -> String { render(facts(model)) }
 
     static func facts(_ model: AppModel) -> Facts {
