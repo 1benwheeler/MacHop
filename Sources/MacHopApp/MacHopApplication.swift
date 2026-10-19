@@ -146,8 +146,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    /// The standard About panel with two short lines of credits. The licence is on its
-    /// copyright line (Info.plist); acknowledgements are in THIRD-PARTY-NOTICES.md.
+    /// The standard About panel with two short lines of credits and no copyright line. The
+    /// licence and acknowledgements ship in the app (LICENSE, THIRD-PARTY-NOTICES.md) and on GitHub.
     func showAbout() {
         NSApp.activate(ignoringOtherApps: true)
         let centred = NSMutableParagraphStyle()
@@ -155,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let credits = NSMutableAttributedString()
         func add(_ text: String, link: URL? = nil) {
             var attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+                .font: NSFont.systemFont(ofSize: 12),
                 .foregroundColor: NSColor.secondaryLabelColor,
                 .paragraphStyle: centred
             ]
@@ -166,7 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         add("Ben Wheeler", link: URL(string: "https://1benwheeler.com/"))
         add("\n\nOpen source on ")
         add("GitHub", link: URL(string: "https://github.com/1benwheeler/MacHop"))
-        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, NSApplication.AboutPanelOptionKey(rawValue: "Copyright"): ""])
     }
 
     /// Dry runs: renders the About panel to `about.png`, off screen, then quits.
