@@ -38,6 +38,8 @@ final class AppModel {
     private(set) var stats = HIDTransport.Stats()
     /// The latest gesture sent to the phone, for the setup guide.
     private(set) var lastPhoneAction: (action: InputSession.PhoneAction, time: Double)?
+    /// The last few times input changed hands and why, for diagnostics.
+    @ObservationIgnored private(set) var recentHandoffs: [(time: Date, text: String)] = []
 
     @ObservationIgnored private let scheduler = MainScheduler()
     @ObservationIgnored private(set) var transport: HIDTransport
@@ -51,6 +53,7 @@ final class AppModel {
     @ObservationIgnored private var linkAttempts = 0
     @ObservationIgnored private var noticeToken = 0
     @ObservationIgnored private var pollingAccessibility = false
+    @ObservationIgnored private var watchingAccessibility = false
     @ObservationIgnored private var ownershipPeriod = 0
     @ObservationIgnored private var traceUntil = 0.0
     @ObservationIgnored private var stopping = false
@@ -213,6 +216,7 @@ final class AppModel {
             tap.stop()
         }
         if !accessibilityGranted { pollForAccessibility() }
+        if tap.isRunning { watchAccessibility() }
         phoneReady = transport.isReady
         subscriptions = transport.subscribedReports.count
         stats = transport.stats
@@ -249,6 +253,7 @@ final class AppModel {
     }
 
     var phoneName: String { settings.phoneName ?? "iPhone" }
+    var captureRunning: Bool { tap.isRunning }
 
     // MARK: Events from components
 
@@ -285,6 +290,8 @@ final class AppModel {
         case .unavailable(let message)?: " (\(message))"
         }
         Log.input.notice("Input now with \(owner == .phone ? "iPhone" : "Mac", privacy: .public)\(why, privacy: .public)")
+        recentHandoffs.append((Date(), "to \(owner == .phone ? "iPhone" : "Mac")\(why)"))
+        if recentHandoffs.count > 10 { recentHandoffs.removeFirst() }
     }
 
     private func peripheralChanged() {
@@ -407,6 +414,30 @@ final class AppModel {
                 guard let self else { return }
                 self.pollingAccessibility = false
                 if EventTap.accessibilityGranted { self.refresh() } else { self.pollForAccessibility() }
+            }
+        }
+    }
+
+    /// While capture runs, checks once a second that Accessibility is still allowed.
+    /// Turning it off while an event tap is running can stop all keyboard and mouse
+    /// input until the Mac restarts (reported on macOS 15 to 27, Sept 2026), and the
+    /// change notification can arrive before the permission reads as gone, so MacHop
+    /// looks for itself and lets go of the tap at once.
+    private func watchAccessibility() {
+        guard !watchingAccessibility else { return }
+        watchingAccessibility = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.watchingAccessibility = false
+                guard self.tap.isRunning else { return }
+                if EventTap.accessibilityGranted {
+                    self.watchAccessibility()
+                } else {
+                    Log.app.notice("Accessibility permission was turned off; stopping input capture")
+                    self.session.returnToMac(.unavailable("Accessibility permission was turned off"))
+                    self.refresh()
+                }
             }
         }
     }

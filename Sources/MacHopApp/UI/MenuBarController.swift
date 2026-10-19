@@ -86,6 +86,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         if model.owner == .phone || model.settings.phoneID != nil { menu.addItem(.separator()) }
         add("MacHop Settings…", #selector(showSettings), key: ",", to: menu)
         add("Setup Guide…", #selector(showGuide), to: menu)
+        add("Check for Updates…", #selector(checkForUpdates), to: menu)
         menu.addItem(.separator())
         add("About MacHop", #selector(showAbout), to: menu)
         add("Quit MacHop", #selector(quit), key: "q", to: menu)
@@ -122,6 +123,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func showSettings() { actions.open() }
     @objc private func showGuide() { actions.guide() }
     @objc private func showAbout() { actions.about() }
+    /// Opens the latest release on GitHub in the browser; MacHop itself never goes online.
+    @objc private func checkForUpdates() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/1benwheeler/MacHop/releases/latest")!)
+    }
     @objc private func quit() { NSApp.terminate(nil) }
 }
 
@@ -268,7 +273,8 @@ extension MenuBarController {
             Divider().padding(.vertical, 5).padding(.horizontal, 14)
             MenuDeviceRow(model: model) {}
             Divider().padding(.vertical, 5).padding(.horizontal, 14)
-            ForEach(["Reconnect", "MacHop Settings…", "Setup Guide…", "About MacHop", "Quit MacHop"], id: \.self) { title in
+            ForEach(["Reconnect", "MacHop Settings…", "Setup Guide…", "Check for Updates…", "About MacHop", "Quit MacHop"],
+                    id: \.self) { title in
                 Text(title).font(.system(size: 13)).padding(.horizontal, 14).padding(.vertical, 3.5)
             }
         }

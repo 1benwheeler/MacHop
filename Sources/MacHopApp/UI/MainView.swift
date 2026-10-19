@@ -490,10 +490,26 @@ private struct SettingsPage: View {
                 RowDivider()
                 SettingRow(symbol: "chart.bar", title: "Diagnostics",
                            detail: "\(model.subscriptions) input reports subscribed · \(model.stats.submitted) sent, \(model.stats.coalesced) coalesced · \(model.stats.backpressureEvents) backpressure, \(model.stats.stalls) stalls") {
-                    EmptyView()
+                    CopyDiagnosticsButton(model: model)
                 }
             }
         }
+    }
+}
+
+/// Copies the diagnostics report (no names, keys or text) for a bug report, and says so.
+private struct CopyDiagnosticsButton: View {
+    let model: AppModel
+    @State private var copied = false
+
+    var body: some View {
+        Button(copied ? "Copied" : "Copy") {
+            Diagnostics.copy(model)
+            copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
+        }
+        .help("Copies MacHop's versions, connection state and settings, to paste into a bug report. " +
+              "It never includes names, keys or anything you've typed.")
     }
 }
 

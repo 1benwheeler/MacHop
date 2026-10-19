@@ -228,3 +228,28 @@ struct SettingsTests {
         #expect(AppSettings.load(defaults: defaults, mainDisplay: 1) == settings)
     }
 }
+
+@MainActor
+@Suite("Diagnostics report")
+struct DiagnosticsTests {
+    @Test("The report shows versions, state and settings, but never the iPhone's name or identifier")
+    func noNames() {
+        var settings = AppSettings.defaultSettings(mainDisplay: 1)
+        settings.phoneName = "Ben's iPhone"
+        settings.phoneID = UUID()
+        settings.phoneModel = "iPhone16,1"
+        settings.wakesPhone = true
+        var facts = Diagnostics.Facts(settings: settings)
+        facts.version = "1.3.0"
+        facts.subscribed = [1, 2, 3]
+        facts.required = [1, 2, 3]
+        facts.handoffs = [(Date(), "to iPhone"), (Date(), "to Mac (edge)")]
+        let report = Diagnostics.render(facts)
+        #expect(report.hasPrefix("MacHop 1.3.0"))
+        #expect(report.contains("iPhone16,1"))
+        #expect(report.contains("wake: on"))
+        #expect(report.contains("to Mac (edge)"))
+        #expect(!report.contains("Ben"))
+        #expect(!report.contains(settings.phoneID!.uuidString))
+    }
+}

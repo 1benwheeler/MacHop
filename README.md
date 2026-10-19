@@ -32,12 +32,16 @@ Apple's Universal Control doesn't support iPhone ([why not](#why-not-just-use-un
 - An iPhone with AssistiveTouch turned on (MacHop's setup guide shows you how). Developed on an iPhone 15 Pro with iOS 26.
 - The Mac and the iPhone signed in to the same Apple Account.
 
+Tested so far on macOS 26 and iOS 26. It hasn't been tested on macOS 27 or iOS 27 yet.
+
 ## Install
 
 ### Download
 
 1. Download `MacHop-<version>.zip` from [Releases](../../releases), unzip it and move **MacHop** to your Applications folder.
 2. Open it. Because MacHop is a free app without a paid Apple developer certificate, macOS says it can't check it for malicious software. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to MacHop. You only need to do this once.
+
+To update, choose **Check for Updates…** in MacHop's menu, which opens the latest release here.
 
 ### Build it yourself
 

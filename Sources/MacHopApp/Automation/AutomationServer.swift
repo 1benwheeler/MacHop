@@ -163,6 +163,9 @@ final class AutomationServer {
         case "status":
             return status()
 
+        case "diagnostics":
+            return ["ok": true, "report": Diagnostics.report(model)]
+
         case "login":
             model.setLaunchAtLogin(request["enabled"] as? Bool ?? true)
             return ["ok": true, "launchAtLogin": model.launchAtLogin]
