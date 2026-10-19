@@ -240,6 +240,8 @@ case "tap":
     }
     let app = connectApp()
     requireReady(app)
+    // Like every other command that touches the screen: only while Settings is showing.
+    do { try Lab(app: app, screen: openScreen()).requireExpectedScreen() } catch { fail("\(error)") }
     do {
         try app.send(["cmd": "hid.pointer", "x": x, "y": y])
         Thread.sleep(forTimeInterval: 0.2)
