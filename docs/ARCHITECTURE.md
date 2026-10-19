@@ -51,5 +51,5 @@ The iPhone reports its model over the same connection, which is how MacHop knows
 iPhone supports a Bluetooth pointer only through AssistiveTouch. That shapes three features:
 
 - **Scrolling:** wheel scrolling is unreliable on iPhone, and touch surfaces are ignored, so two-finger scrolling is sent as a press-and-drag, the way AssistiveTouch drags with a finger.
-- **Gestures:** three-finger swipes press extra mouse buttons (4, 5 and 6), which you assign to Home, the App Switcher and Notification Centre once in AssistiveTouch.
+- **Gestures:** a three-finger swipe up sends the keyboard's Menu key, which iPhone treats as Home. Swipe up and hold, and swipe down, press extra mouse buttons, which you assign once in AssistiveTouch to the App Switcher and Notification Centre.
 - **The pointer itself:** iOS draws and fades it; a Bluetooth pointer can't hide it.

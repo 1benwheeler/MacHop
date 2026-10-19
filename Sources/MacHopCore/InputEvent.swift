@@ -22,7 +22,8 @@ public enum InputEvent: Equatable, Sendable {
 }
 
 /// A Mac mouse button by number (0 left, 1 right, 2 middle, 3+ extra buttons).
-/// Every button gets ownership tracking; only the first three exist on the phone.
+/// Every button gets ownership tracking; only the first three are forwarded to the
+/// phone. (The gestures press higher buttons of their own; see `PhoneAction`.)
 public struct MouseButton: Hashable, Sendable, CustomStringConvertible {
     public let number: Int
 

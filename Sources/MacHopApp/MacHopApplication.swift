@@ -67,7 +67,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 snapshot(window, steps: steps, to: folder) { [weak self] in
                     self?.snapshot(menuWindow, steps: [("menu", {})], to: folder) {
                         self?.snapshot(pickerWindow, steps: [("picker", {})], to: folder) {
-                            self?.snapshot(controlsWindow, steps: [("controls", {})], to: folder)
+                            self?.snapshot(controlsWindow, steps: [("controls", {})], to: folder) {
+                                self?.snapshotAbout(to: folder)
+                            }
                         }
                     }
                 }
@@ -144,23 +146,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    /// The standard About panel with two short lines of credits. The licence is on its
+    /// copyright line (Info.plist); acknowledgements are in THIRD-PARTY-NOTICES.md.
     func showAbout() {
         NSApp.activate(ignoringOtherApps: true)
         let centred = NSMutableParagraphStyle()
         centred.alignment = .center
-        let small = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
         let credits = NSMutableAttributedString()
-        func add(_ text: String, colour: NSColor = .secondaryLabelColor, link: URL? = nil, font: NSFont = small) {
-            var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: colour, .paragraphStyle: centred]
+        func add(_ text: String, link: URL? = nil) {
+            var attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: centred
+            ]
             if let link { attributes[.link] = link }
             credits.append(NSAttributedString(string: text, attributes: attributes))
         }
-        add("Use your Mac's keyboard and trackpad on your iPhone.\n\n")
-        add("Made by Ben Wheeler\n", colour: .labelColor, font: .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium))
-        add("1benwheeler.com", link: URL(string: "https://1benwheeler.com/"))
-        add("\n\nFree software under the GNU Affero General Public License 3.0. " +
-            "Includes Bluetooth keyboard and pointer work adapted from BT Remote by jqssun (AGPL-3.0).")
+        add("Made by ")
+        add("Ben Wheeler", link: URL(string: "https://1benwheeler.com/"))
+        add("\n\nOpen source on ")
+        add("GitHub", link: URL(string: "https://github.com/1benwheeler/MacHop"))
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+    }
+
+    /// Dry runs: renders the About panel to `about.png`, off screen, then quits.
+    private func snapshotAbout(to folder: URL) {
+        let ours = Set(NSApp.windows.map(ObjectIdentifier.init))
+        showAbout()
+        let panel = NSApp.windows.first { !ours.contains(ObjectIdentifier($0)) && $0.isVisible }
+        panel?.setFrameOrigin(NSPoint(x: -10_000, y: -10_000))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            MainActor.assumeIsolated {
+                if let view = panel?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                    view.cacheDisplay(in: view.bounds, to: bitmap)
+                    try? bitmap.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("about.png"))
+                }
+                NSApp.terminate(nil)
+            }
+        }
     }
 
     private func makeWindow() -> NSWindow {

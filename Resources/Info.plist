@@ -27,6 +27,6 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Ben Wheeler</string>
+	<string>© 2026 Ben Wheeler · AGPL-3.0</string>
 </dict>
 </plist>

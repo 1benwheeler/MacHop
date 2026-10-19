@@ -450,12 +450,15 @@ private struct SettingsPage: View {
                         .toggleStyle(.switch).labelsHidden()
                 }
                 RowDivider()
+                // Part of controlling the iPhone: greyed out while that's off, keeping its value.
                 SettingRow(symbol: "moon.zzz", title: "Wake your iPhone when you move onto it",
                            detail: "When this is off, a sleeping iPhone stays asleep until you wake it.") {
                     Toggle("Wake your iPhone", isOn: Binding(get: { model.settings.wakesPhone == true },
                                                              set: { on in model.update { $0.wakesPhone = on } }))
                         .toggleStyle(.switch).labelsHidden()
                 }
+                .disabled(model.settings.paused)
+                .opacity(model.settings.paused ? 0.45 : 1)
                 RowDivider()
                 SettingRow(symbol: "speaker.wave.2", title: "Volume and media keys control iPhone",
                            detail: "While you're on your iPhone, the volume, mute and play keys control it instead of this Mac.") {
