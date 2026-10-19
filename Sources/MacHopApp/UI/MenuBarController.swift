@@ -88,6 +88,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         add("Setup Guide…", #selector(showGuide), to: menu)
         add("Check for Updates…", #selector(checkForUpdates), to: menu)
         menu.addItem(.separator())
+        add("Report an Issue…", #selector(reportIssue), to: menu)
         add("About MacHop", #selector(showAbout), to: menu)
         add("Quit MacHop", #selector(quit), key: "q", to: menu)
     }
@@ -127,6 +128,28 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func checkForUpdates() {
         NSWorkspace.shared.open(URL(string: "https://github.com/1benwheeler/MacHop/releases/latest")!)
     }
+
+    /// Copies the diagnostics report and opens a new GitHub issue with a short template.
+    /// The report goes on the clipboard, not in the address, so nothing leaves the Mac
+    /// unless the user pastes it and submits.
+    @objc private func reportIssue() {
+        Diagnostics.copy(model)
+        var issue = URLComponents(string: "https://github.com/1benwheeler/MacHop/issues/new")!
+        issue.queryItems = [URLQueryItem(name: "body", value: Self.issueTemplate)]
+        if let url = issue.url { NSWorkspace.shared.open(url) }
+    }
+
+    private static let issueTemplate = """
+        **What happened?**
+
+
+        **What did you expect to happen?**
+
+
+        **Diagnostics**
+        MacHop has copied them to your clipboard: paste them below. They never include names, keys or anything you've typed.
+
+        """
     @objc private func quit() { NSApp.terminate(nil) }
 }
 
@@ -273,8 +296,8 @@ extension MenuBarController {
             Divider().padding(.vertical, 5).padding(.horizontal, 14)
             MenuDeviceRow(model: model) {}
             Divider().padding(.vertical, 5).padding(.horizontal, 14)
-            ForEach(["Reconnect", "MacHop Settings…", "Setup Guide…", "Check for Updates…", "About MacHop", "Quit MacHop"],
-                    id: \.self) { title in
+            ForEach(["Reconnect", "MacHop Settings…", "Setup Guide…", "Check for Updates…", "Report an Issue…",
+                     "About MacHop", "Quit MacHop"], id: \.self) { title in
                 Text(title).font(.system(size: 13)).padding(.horizontal, 14).padding(.vertical, 3.5)
             }
         }

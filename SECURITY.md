@@ -10,7 +10,7 @@ Please report issues against the [latest release](https://github.com/1benwheeler
 
 ## How MacHop protects you
 
-- **No network access.** MacHop has no internet code and sends nothing anywhere except Bluetooth input to your own iPhone. There's no analytics or tracking. Check for Updates only opens the releases page in your browser.
+- **No network access.** MacHop has no internet code and sends nothing anywhere except Bluetooth input to your own iPhone. There's no analytics or tracking. Check for Updates and Report an Issue only open GitHub in your browser; Report an Issue copies the diagnostics report (no names, keys or text) for you to paste if you choose.
 - **Nothing you type is recorded.** Keystrokes are passed to the iPhone and never logged or stored.
 - **Bluetooth goes only to your iPhone,** over an encrypted, paired connection. Input reports are sent only to the iPhone you chose, and other devices can't read or change MacHop's input state.
 - **Password fields stay private.** While macOS Secure Input is active (for example, in a password field), MacHop won't send input to the iPhone.
