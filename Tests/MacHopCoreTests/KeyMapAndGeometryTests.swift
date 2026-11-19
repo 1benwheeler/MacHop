@@ -88,6 +88,8 @@ struct GeometryTests {
     func iPhoneModels() throws {
         let pro = try #require(IPhoneModels.model(for: "iPhone16,1"))
         #expect(pro.name == "iPhone 15 Pro" && pro.width == 393 && pro.height == 852)
+        let proMax = try #require(IPhoneModels.model(for: "iPhone18,2"))
+        #expect(proMax.name == "iPhone 17 Pro Max" && proMax.width == 440 && proMax.height == 956)
         #expect(IPhoneModels.model(for: "iPhone99,9") == nil)
         let layout = PhoneLayout(displayID: 1, size: 900)
         // A 15 Pro (and Standard) keeps the long-standing default exactly.

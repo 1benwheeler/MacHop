@@ -58,6 +58,7 @@ public enum IPhoneModels {
         "iPhone16,2": ("iPhone 15 Pro Max", 430, 932), "iPhone17,1": ("iPhone 16 Pro", 402, 874),
         "iPhone17,2": ("iPhone 16 Pro Max", 440, 956), "iPhone17,3": ("iPhone 16", 393, 852),
         "iPhone17,4": ("iPhone 16 Plus", 430, 932), "iPhone17,5": ("iPhone 16e", 390, 844),
+        "iPhone18,2": ("iPhone 17 Pro Max", 440, 956),
     ]
 }
 
