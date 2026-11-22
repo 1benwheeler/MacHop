@@ -226,6 +226,15 @@ struct SettingsTests {
         #expect(ArrangementActions.label(for: .bottom) == "Move iPhone to the bottom")
     }
 
+    @Test("The setup guide suggests opening at login the first time; afterwards its box shows what's set")
+    func openAtLoginBox() {
+        #expect(SetupGuideView.openAtLoginStartsTicked(firstRun: true, opensAtLogin: false))
+        #expect(SetupGuideView.openAtLoginStartsTicked(firstRun: true, opensAtLogin: true))
+        #expect(SetupGuideView.openAtLoginStartsTicked(firstRun: false, opensAtLogin: true))
+        #expect(!SetupGuideView.openAtLoginStartsTicked(firstRun: false, opensAtLogin: false),
+                "someone who switched it off doesn't get it switched back on by reopening the guide")
+    }
+
     @Test("An animated change always happens, with or without Reduce Motion")
     func motion() {
         var changed = false

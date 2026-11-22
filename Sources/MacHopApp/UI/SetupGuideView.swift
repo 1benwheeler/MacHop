@@ -18,8 +18,22 @@ struct SetupGuideView: View {
     @State private var showingPhones = false
     @State private var gestureStart = ProcessInfo.processInfo.systemUptime
     @State private var gesturesSent: Set<InputSession.PhoneAction> = []
-    @State private var openAtLogin = true
+    @State private var openAtLogin: Bool
     @State private var expanded: Step?
+
+    init(model: AppModel, onClose: @escaping () -> Void) {
+        self.model = model
+        self.onClose = onClose
+        // (Screenshots show the first run.)
+        _openAtLogin = State(initialValue: Self.openAtLoginStartsTicked(
+            firstRun: model.settings.needsSetup || model.demo, opensAtLogin: model.launchAtLogin))
+    }
+
+    /// The first time through, opening at login is suggested. After that the box shows
+    /// what's set, so reopening the guide and clicking Done can't switch it back on.
+    static func openAtLoginStartsTicked(firstRun: Bool, opensAtLogin: Bool) -> Bool {
+        firstRun || opensAtLogin
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,7 +95,7 @@ struct SetupGuideView: View {
             Button(requiredDone ? "Done" : "Finish Later") {
                 if requiredDone {
                     model.update { $0.setupFinished = true }
-                    if openAtLogin && !model.launchAtLogin { model.setLaunchAtLogin(true) }
+                    if openAtLogin != model.launchAtLogin { model.setLaunchAtLogin(openAtLogin) }
                 }
                 onClose()
             }
