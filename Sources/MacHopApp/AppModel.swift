@@ -217,37 +217,22 @@ final class AppModel {
         phoneReady = transport.isReady
         subscriptions = transport.subscribedReports.count
         stats = transport.stats
-        let blocker: String? =
-            settings.paused ? "Paused" :
-            !accessibilityGranted ? "MacHop needs Accessibility permission" :
-            !tap.isRunning ? "Input capture is unavailable" :
-            monitor.blockingReason
-        let arrangement: String? = session.screenLink == nil ? "Check the arrangement" : nil
-        let reason = blocker ?? (transport.isReady ? nil : "iPhone is not connected") ?? arrangement
-        // Waking is only offered when the iPhone being asleep is all that's in the way.
-        session.mayWakePhone = settings.wakesPhone == true && transport.isSuspended && blocker == nil && arrangement == nil
-        session.setEnabled(reason == nil, reason: reason ?? "")
+        let availability = self.availability
+        session.mayWakePhone = availability.mayWakePhone
+        session.setEnabled(availability.disabledReason == nil, reason: availability.disabledReason ?? "")
         if transport.isReady { linkAttempts = 0 }
         watchLink()
     }
 
-    var status: Status {
-        if owner == .phone { return .controlling }
-        if settings.paused { return .paused }
-        if !accessibilityGranted { return .needsAccessibility }
-        switch bluetooth {
-        case .off: return .bluetoothOff
-        case .unauthorized: return .bluetoothDenied
-        case .unsupported: return .bluetoothUnavailable("This Mac cannot act as a Bluetooth keyboard.")
-        case .failed(let message): return .bluetoothUnavailable(message)
-        default: break
-        }
-        if settings.phoneID == nil && !phoneReady { return .choosePhone }
-        if let reason = monitor.blockingReason { return .blocked(reason) }
-        if phoneReady { return session.screenLink == nil ? .blocked("Check the arrangement in Settings.") : .ready }
-        if link == .connected && transport.isSuspended { return .phoneAsleep }
-        return link == .connected ? .waitingForPhone : .connecting
+    /// The facts the availability decision draws on, as they stand now.
+    var availability: Availability {
+        Availability(owner: owner, paused: settings.paused, accessibilityGranted: accessibilityGranted,
+                     capturing: tap.isRunning, systemBlock: monitor.blockingReason, bluetooth: bluetooth, link: link,
+                     phoneChosen: settings.phoneID != nil, phoneReady: phoneReady, phoneSuspended: transport.isSuspended,
+                     arrangementUsable: session.screenLink != nil, wakesPhone: settings.wakesPhone == true)
     }
+
+    var status: Status { availability.status }
 
     var phoneName: String { settings.phoneName ?? "iPhone" }
     var captureRunning: Bool { tap.isRunning }
@@ -361,9 +346,7 @@ final class AppModel {
     /// times, then tell the user. One check at a time, so reconnects can't keep
     /// postponing it.
     private func watchLink() {
-        // A locked iPhone pauses input on purpose; reconnecting would only wake it up
-        // every few seconds. The watchdog is for links that never start accepting input.
-        guard !linkCheckPending, link == .connected, !transport.isReady, !transport.isSuspended else { return }
+        guard !linkCheckPending, availability.watchesLink else { return }
         linkCheckPending = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
             MainActor.assumeIsolated {
@@ -372,11 +355,14 @@ final class AppModel {
                 guard !self.transport.isSuspended else { return }
                 guard !self.transport.isReady, self.settings.phoneID != nil, !self.dryRun else { return }
                 self.linkAttempts += 1
-                if self.linkAttempts <= 3 {
+                switch Availability.linkWatchAction(attempt: self.linkAttempts) {
+                case .reconnect:
                     self.connector.reconnect()
-                } else if self.linkAttempts == 4 {
+                case .tellUser:
                     self.show(notice: "\(self.phoneName) is in range but has not accepted MacHop as a keyboard. " +
                               "Check that Bluetooth and AssistiveTouch are on, then try Reconnect.")
+                case .wait:
+                    break
                 }
                 self.watchLink()
             }

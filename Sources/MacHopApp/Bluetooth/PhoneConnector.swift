@@ -165,10 +165,18 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         }
     }
 
+    /// How long to wait before connecting again. Immediate failures (e.g. an encryption
+    /// error) back off, doubling up to half a minute; a plain disconnection reconnects at once.
+    static func retryDelay(afterFailures failures: Int) -> Double {
+        failures == 0 ? 0.5 : min(30, Double(1 << min(failures, 5)))
+    }
+
+    /// A link that drops within seconds of connecting (e.g. the phone removed the
+    /// pairing) counts as a failure, so reconnecting backs off instead of churning.
+    static func countsAsFailure(linkLasted seconds: Double) -> Bool { seconds < 10 }
+
     private func retry() {
-        // Immediate failures (e.g. an encryption error) back off; a plain
-        // disconnection reconnects at once.
-        let delay = failures == 0 ? 0.5 : min(30, Double(1 << min(failures, 5)))
+        let delay = Self.retryDelay(afterFailures: failures)
         guard !retryScheduled else { return }
         retryScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
@@ -230,10 +238,8 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         guard peripheral === self.peripheral else { return }
-        // A link that drops within seconds of connecting (e.g. the phone removed the
-        // pairing) counts as a failure, so reconnecting backs off instead of churning.
         let lasted = connectedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? 0
-        failures = lasted < 10 ? failures + 1 : 0
+        failures = Self.countsAsFailure(linkLasted: lasted) ? failures + 1 : 0
         connectedAt = nil
         Log.bluetooth.notice("iPhone link closed\(error.map { ": \($0.localizedDescription)" } ?? "", privacy: .public)")
         linkState = .connecting

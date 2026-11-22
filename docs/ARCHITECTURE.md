@@ -12,7 +12,7 @@ macOS input ──► EventTap ──► InputSession ──► HIDTransport ─
 | Module | What's in it |
 | --- | --- |
 | `MacHopCore` | All the decisions: `InputSession`, the edge geometry (`ScreenLink`), the Bluetooth report formats (`HIDProfile`), the send queue (`HIDTransport`). Pure Swift, no Apple frameworks, so it can be tested without hardware. |
-| `MacHopApp` | The macOS side: input capture, the hidden Mac cursor, Bluetooth, and the menu-bar app and window (SwiftUI). |
+| `MacHopApp` | The macOS side: input capture, the hidden Mac cursor, Bluetooth, and the menu-bar app and window (SwiftUI). `Availability` decides, from the state of all of those, whether the iPhone may take input right now and what MacHop says about it; it's plain values, so it's tested too. |
 | `VirtualPhone` | A simulated iPhone that decodes MacHop's reports independently, used by the tests. |
 | `LabKit`, `machop-lab` | Tools for testing on a real iPhone (see [CONTRIBUTING.md](../CONTRIBUTING.md)). |
 
