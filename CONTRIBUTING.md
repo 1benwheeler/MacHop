@@ -12,7 +12,7 @@ scripts/test.sh            # all automated tests, about 2 seconds
 scripts/install.sh         # test, build, install to /Applications and open
 ```
 
-`scripts/build.sh` builds `build/MacHop.app` without installing it. How the code fits together is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+`scripts/build.sh` builds `build/MacHop.app` without installing it. `scripts/snapshot.sh <folder>` draws every page of the window, the menu and the About box to PNG files, off screen, so you can check a UI change without clicking through it. How the code fits together is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Tests
 

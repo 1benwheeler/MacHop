@@ -8,6 +8,7 @@ Notes for AI coding agents, and for people. MacHop is a macOS menu-bar app that 
 scripts/test.sh       # all tests, about 2 seconds; run before every commit
 scripts/install.sh    # test, build, install to /Applications and open
 scripts/release.sh    # build the signed release zip into dist/
+scripts/snapshot.sh d # draw every page of the UI into folder d, off screen
 scripts/lab.sh doctor # testing on a real iPhone; see CONTRIBUTING.md
 ```
 
