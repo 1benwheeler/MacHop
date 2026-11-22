@@ -19,12 +19,17 @@ final class AppModel {
         case phoneAsleep
         case ready
         case controlling
+        /// The pointer is back on the Mac, but typing is still going to the iPhone.
+        case typingOnPhone
         case paused
         case blocked(BlockReason)
     }
 
     private(set) var settings: AppSettings
     private(set) var owner: Owner = .mac
+    /// The pointer is on the Mac but typing still goes to the iPhone (the user chose that
+    /// in Settings and has clicked on the iPhone).
+    private(set) var typingOnPhone = false
     private(set) var phoneReady = false
     private(set) var accessibilityGranted = EventTap.accessibilityGranted
     private(set) var bluetooth: HIDPeripheral.State = .starting
@@ -87,6 +92,8 @@ final class AppModel {
         monitor.onDisplaysChanged = { [weak self] in self?.displaysChanged() }
         monitor.onFrontChange = { [weak self] in
             if self?.owner == .phone { self?.cursor.reassertHidden() }
+            // Switching apps or Spaces on the Mac means the next typing is meant for the Mac.
+            self?.session.returnKeyboardToMac()
         }
         monitor.start()
         tap.decide = { [weak self] event in
@@ -136,6 +143,7 @@ final class AppModel {
         }
         transport.onStall = { [weak self] in self?.transportStalled() }
         session.onOwnerChange = { [weak self] owner, reason in self?.ownerChanged(owner, reason: reason) }
+        session.onKeyboardOwnerChange = { [weak self] _ in self?.typingChanged() }
         session.onPhoneAction = { [weak self] action in
             let sent = action == .home ? "Menu key" : "button \(action.rawValue)"
             Log.input.notice("iPhone gesture: \(String(describing: action), privacy: .public) (\(sent, privacy: .public))")
@@ -228,7 +236,7 @@ final class AppModel {
 
     /// The facts the availability decision draws on, as they stand now.
     var availability: Availability {
-        Availability(owner: owner, paused: settings.paused, accessibilityGranted: accessibilityGranted,
+        Availability(owner: owner, typingOnPhone: typingOnPhone, paused: settings.paused, accessibilityGranted: accessibilityGranted,
                      capturing: tap.isRunning, systemBlock: monitor.blockingReason, bluetooth: bluetooth, link: link,
                      phoneChosen: settings.phoneID != nil, phoneReady: phoneReady, phoneSuspended: transport.isSuspended,
                      arrangementUsable: session.screenLink != nil, wakesPhone: settings.wakesPhone == true)
@@ -243,6 +251,7 @@ final class AppModel {
 
     private func ownerChanged(_ owner: Owner, reason: ReturnReason?) {
         self.owner = owner
+        typingChanged()
         traceUntil = ProcessInfo.processInfo.systemUptime + 0.4
         tap.traceGestures = owner == .phone && AutomationServer.isEnabled
         if owner == .phone {
@@ -275,6 +284,17 @@ final class AppModel {
         Log.input.notice("Input now with \(owner == .phone ? "iPhone" : "Mac", privacy: .public)\(why, privacy: .public)")
         recentHandoffs.append((Date(), "to \(owner == .phone ? "iPhone" : "Mac")\(why)"))
         if recentHandoffs.count > 10 { recentHandoffs.removeFirst() }
+    }
+
+    /// Typing stays with the iPhone while the pointer is back on the Mac, or has stopped.
+    private func typingChanged() {
+        let typing = session.keyboardOwner == .phone && session.owner == .mac
+        guard typing != typingOnPhone else { return }
+        typingOnPhone = typing
+        Log.input.notice("Typing \(typing ? "stays with the iPhone" : "is back with the Mac", privacy: .public)")
+        recentHandoffs.append((Date(), typing ? "typing stays with iPhone" : "typing back to Mac"))
+        if recentHandoffs.count > 10 { recentHandoffs.removeFirst() }
+        keepWatch()
     }
 
     private func peripheralChanged() {
@@ -355,7 +375,7 @@ final class AppModel {
     /// decides what each look leads to. When nothing needs watching (MacHop switched off
     /// with everything in order, say), nothing runs.
     private var needsWatch: Bool {
-        tap.isRunning || !accessibilityGranted || owner == .phone || availability.watchesLink
+        tap.isRunning || !accessibilityGranted || owner == .phone || typingOnPhone || availability.watchesLink
     }
 
     private func keepWatch() {
@@ -371,7 +391,8 @@ final class AppModel {
 
     private func look() {
         guard !stopping, needsWatch else { return }
-        let onPhone = owner == .phone
+        // Typing that goes to the iPhone needs the same care as the pointer being there.
+        let onPhone = owner == .phone || typingOnPhone
         let facts = Watchdog.Facts(capturing: tap.isRunning, accessibilityWasGranted: accessibilityGranted,
                                    accessibilityGranted: EventTap.accessibilityGranted, phoneHasInput: onPhone,
                                    secureInput: onPhone && SystemMonitor.secureInputActive,

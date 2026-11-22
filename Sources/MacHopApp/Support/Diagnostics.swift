@@ -103,6 +103,7 @@ enum Diagnostics {
             "Displays: \(displays)",
             "Scrolling: \(session.scroll.style.rawValue); gestures: \(session.phoneGestures ? "on" : "off"); " +
                 "media keys: \(session.mediaKeysToPhone ? "on" : "off"); wake: \(settings.wakesPhone == true ? "on" : "off"); " +
+                "typing stays: \(session.keyboardStaysOnPhone ? "on" : "off"); " +
                 "edge resistance \(Int(session.edgeResistance)); pointer speed \(String(format: "%.2f", session.pointerSpeed))",
             "",
             "Sent \(stats.submitted) reports, \(stats.coalesced) coalesced, \(stats.backpressureEvents) backpressure, " +

@@ -6,6 +6,8 @@ import MacHopCore
 /// decision here means it can be tested without Bluetooth or an event tap.
 struct Availability: Equatable {
     var owner: Owner = .mac
+    /// The pointer is on the Mac, but typing still goes to the iPhone.
+    var typingOnPhone = false
     /// MacHop is switched off.
     var paused = false
     var accessibilityGranted = true
@@ -52,6 +54,7 @@ struct Availability: Equatable {
 
     var status: AppModel.Status {
         if owner == .phone { return .controlling }
+        if typingOnPhone { return .typingOnPhone }
         if paused { return .paused }
         if !accessibilityGranted { return .needsAccessibility }
         switch bluetooth {

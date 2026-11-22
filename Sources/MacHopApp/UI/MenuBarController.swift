@@ -43,6 +43,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         switch icon {
         case .mark, .dimmedMark:
             image = Self.mark
+        case .keyboard:
+            image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: nil)
+            image?.isTemplate = true
         case .warning:
             image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)
             image?.isTemplate = true
@@ -72,7 +75,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         // Day to day the menu stays short; Reconnect and the setup guide appear only when
         // they're useful (the guide is always in the window's sidebar).
         var actions = 0
-        if model.owner == .phone {
+        if model.owner == .phone || model.typingOnPhone {
             let back = add("Return to Mac", #selector(returnToMac), to: menu)
             back.keyEquivalent = "\u{1b}"
             back.keyEquivalentModifierMask = [.control, .option, .command]

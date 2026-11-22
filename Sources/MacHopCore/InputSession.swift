@@ -93,22 +93,27 @@ public struct SessionSettings: Equatable, Hashable, Sendable, Codable {
     public var pointerSpeed: Double
     /// Volume, mute and media keys control the phone while it has input.
     public var mediaKeysToPhone: Bool
+    /// Once you've clicked on the phone, typing stays there when the pointer comes back
+    /// to the Mac, until you click on the Mac. Off: typing follows the pointer.
+    public var keyboardStaysOnPhone: Bool
 
     public static let resistanceRange: ClosedRange<Double> = 0...60
     public static let pointerSpeedRange: ClosedRange<Double> = 0.4...2.5
 
     public init(layout: PhoneLayout, scroll: ScrollSettings = ScrollSettings(), edgeResistance: Double = 6,
-                phoneGestures: Bool = true, pointerSpeed: Double = 1, mediaKeysToPhone: Bool = false) {
+                phoneGestures: Bool = true, pointerSpeed: Double = 1, mediaKeysToPhone: Bool = false,
+                keyboardStaysOnPhone: Bool = false) {
         self.layout = layout
         self.scroll = scroll
         self.edgeResistance = edgeResistance
         self.phoneGestures = phoneGestures
         self.pointerSpeed = pointerSpeed
         self.mediaKeysToPhone = mediaKeysToPhone
+        self.keyboardStaysOnPhone = keyboardStaysOnPhone
     }
 
     private enum CodingKeys: String, CodingKey {
-        case layout, scroll, edgeResistance, phoneGestures, pointerSpeed, mediaKeysToPhone
+        case layout, scroll, edgeResistance, phoneGestures, pointerSpeed, mediaKeysToPhone, keyboardStaysOnPhone
     }
 
     /// Settings saved before newer fields existed decode with their defaults.
@@ -120,6 +125,7 @@ public struct SessionSettings: Equatable, Hashable, Sendable, Codable {
         phoneGestures = try container.decodeIfPresent(Bool.self, forKey: .phoneGestures) ?? true
         pointerSpeed = try container.decodeIfPresent(Double.self, forKey: .pointerSpeed) ?? 1
         mediaKeysToPhone = try container.decodeIfPresent(Bool.self, forKey: .mediaKeysToPhone) ?? false
+        keyboardStaysOnPhone = try container.decodeIfPresent(Bool.self, forKey: .keyboardStaysOnPhone) ?? false
     }
 
     public func sanitized() -> SessionSettings {
@@ -143,6 +149,15 @@ public struct SessionSettings: Equatable, Hashable, Sendable, Codable {
 @MainActor
 public final class InputSession {
     public private(set) var owner: Owner = .mac
+    /// Where typing goes. The same as `owner`, except with `keyboardStaysOnPhone`: then,
+    /// once the user has clicked on the phone, the keyboard stays with it after the
+    /// pointer returns to the Mac, until a click on the Mac (or anything else that
+    /// returns input) brings it back.
+    public private(set) var keyboardOwner: Owner = .mac {
+        didSet { if keyboardOwner != oldValue { onKeyboardOwnerChange?(keyboardOwner) } }
+    }
+    /// The user has clicked on the phone since the keyboard last came back to the Mac.
+    private var clickedOnPhone = false
     public private(set) var settings: SessionSettings
     public private(set) var screenLink: ScreenLink?
     /// The phone pointer, in phone-local Mac points (0…width, 0…height).
@@ -154,6 +169,8 @@ public final class InputSession {
 
     /// Called after every ownership change.
     public var onOwnerChange: ((Owner, ReturnReason?) -> Void)?
+    /// Called when typing moves between the Mac and the phone.
+    public var onKeyboardOwnerChange: ((Owner) -> Void)?
     /// Consulted just before the phone takes input; a non-nil reason refuses the
     /// crossing (for example while macOS Secure Input protects a password field).
     public var entryGuard: (() -> EntryRefusal?)?
@@ -306,21 +323,25 @@ public final class InputSession {
 
     /// Returns input to the Mac, releasing everything held on the phone.
     public func returnToMac(_ reason: ReturnReason, cursorAt point: Point? = nil) {
-        guard owner == .phone else { return }
+        guard owner == .phone else {
+            // Only the keyboard is still with the phone: every return but a walk back
+            // through the edge (which already happened) brings it home too.
+            if reason != .edge { returnKeyboardToMac() }
+            return
+        }
         finishStroke()
         homeIndicatorPress = nil
         owner = .mac
-        for (code, holder) in keyHolders where holder == .phone { keyHolders[code] = .swallowed }
         for (button, holder) in buttonHolders where holder == .phone { buttonHolders[button] = .swallowed }
-        var mediaHeld = false
-        for (key, holder) in mediaHolders where holder == .phone {
-            mediaHolders[key] = .swallowed
-            mediaHeld = true
-        }
-        if mediaHeld { link.send(.consumer(.released)) }
-        keyboard = .released
         phoneButtons = 0
-        link.send(.keyboard(.released))
+        // Walking the pointer back through the edge leaves typing with the phone when the
+        // user asked for that and has clicked there. Keys held now are still held there,
+        // and their releases follow them as usual.
+        if reason == .edge, settings.keyboardStaysOnPhone, clickedOnPhone {
+            keyboardOwner = .phone
+        } else {
+            releaseKeyboard()
+        }
         // Release any button where it is, and leave the pointer there: iOS fades it
         // after about 15 s without movement (nothing a Bluetooth pointer sends hides it sooner).
         if let pointer = phonePointer { link.send(.pointer(pointerReport(at: pointer))) }
@@ -388,9 +409,33 @@ public final class InputSession {
         return true
     }
 
+    /// Brings typing back to the Mac while the pointer is already there, releasing every
+    /// key held on the phone. Does nothing unless only the keyboard is with the phone.
+    public func returnKeyboardToMac() {
+        guard owner == .mac, keyboardOwner == .phone else { return }
+        releaseKeyboard()
+    }
+
+    /// Releases every key and media key held on the phone and gives the keyboard to the Mac.
+    /// Keys still physically held stay swallowed until they're released.
+    private func releaseKeyboard() {
+        for (code, holder) in keyHolders where holder == .phone { keyHolders[code] = .swallowed }
+        var mediaHeld = false
+        for (key, holder) in mediaHolders where holder == .phone {
+            mediaHolders[key] = .swallowed
+            mediaHeld = true
+        }
+        if mediaHeld { link.send(.consumer(.released)) }
+        keyboard = .released
+        link.send(.keyboard(.released))
+        clickedOnPhone = false
+        keyboardOwner = .mac
+    }
+
     private func takeInput(at entry: Point, cursorFrom location: Point) {
         guard let screenLink else { return }
         owner = .phone
+        keyboardOwner = .phone
         phonePointer = entry
         crossingPressure = 0
         returnPressure = 0
@@ -624,6 +669,9 @@ public final class InputSession {
             let at = screenFraction(pointer)
             onPhoneTrace?("button \(button) \(down ? "down" : "up") at \(Int(at.x * 100))%, \(Int(at.y * 100))% of the screen")
         }
+        if down, owner == .phone { clickedOnPhone = true }
+        // A click on the Mac is where typing goes next.
+        if down, owner == .mac { returnKeyboardToMac() }
         if down, owner == .phone, pressesHomeIndicator(button), let pointer = phonePointer {
             buttonHolders[button] = .phone
             homeIndicatorPress = (pointer, false)
@@ -675,10 +723,10 @@ public final class InputSession {
                 // Auto-repeat follows the original press. The phone repeats held keys
                 // itself, and a Mac key must not keep repeating once the phone has input.
                 let holder = keyHolders[code] ?? .mac
-                return holder == .mac && owner == .mac ? .pass : .suppress
+                return holder == .mac && keyboardOwner == .mac ? .pass : .suppress
             }
-            if keyHolders[code] == .phone && owner == .phone { return .suppress }
-            if owner == .phone && isEmergencyShortcut(code: code, modifiers: modifiers) {
+            if keyHolders[code] == .phone && keyboardOwner == .phone { return .suppress }
+            if keyboardOwner == .phone && isEmergencyShortcut(code: code, modifiers: modifiers) {
                 keyHolders[code] = .swallowed
                 returnToMac(.shortcut)
                 return .suppress
@@ -689,7 +737,7 @@ public final class InputSession {
                 return .suppress
             }
             // A fresh press replaces any stale record left by a missed release.
-            guard owner == .phone else {
+            guard keyboardOwner == .phone else {
                 keyHolders[code] = .mac
                 return .pass
             }
@@ -711,13 +759,13 @@ public final class InputSession {
     private func modifierChanged(code: UInt16, modifiers: ModifierFlags) -> Disposition {
         if code == KeyMap.capsLockKeyCode {
             // Caps Lock arrives as a toggle, not a press/release pair.
-            guard owner == .phone else { return .pass }
+            guard keyboardOwner == .phone else { return .pass }
             pressKey(KeyMap.capsLockUsage)
             releaseKey(KeyMap.capsLockUsage)
             return .suppress
         }
         guard let aggregate = KeyMap.aggregateFlag(forKeyCode: code),
-              let held = KeyMap.heldFlag(forKeyCode: code) else { return owner == .phone ? .suppress : .pass }
+              let held = KeyMap.heldFlag(forKeyCode: code) else { return keyboardOwner == .phone ? .suppress : .pass }
         let current = keyHolders[code]
         // Prefer the side-specific bit; synthetic events may only carry the aggregate.
         let isDown: Bool
@@ -728,7 +776,7 @@ public final class InputSession {
 
         if isDown {
             if let current { return current == .mac ? .pass : .suppress }
-            guard owner == .phone else {
+            guard keyboardOwner == .phone else {
                 keyHolders[code] = .mac
                 return .pass
             }
@@ -773,7 +821,7 @@ public final class InputSession {
     private func mediaKeyChanged(_ key: MediaKey, down: Bool, isRepeat: Bool) -> Disposition {
         if down {
             if isRepeat { return (mediaHolders[key] ?? .mac) == .mac ? .pass : .suppress }
-            guard owner == .phone, settings.mediaKeysToPhone else {
+            guard keyboardOwner == .phone, settings.mediaKeysToPhone else {
                 mediaHolders[key] = .mac
                 return .pass
             }

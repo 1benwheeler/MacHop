@@ -105,6 +105,16 @@ struct AvailabilityTests {
         #expect(all.status == .ready)
     }
 
+    @Test("Typing that stays on the iPhone shows as its own status, after the pointer being there and before everything else")
+    func typingOnPhone() {
+        var state = ready
+        state.typingOnPhone = true
+        #expect(state.status == .typingOnPhone)
+        state.owner = .phone
+        #expect(state.status == .controlling)
+        #expect(Availability(typingOnPhone: false).status == .ready)
+    }
+
     @Test("Bluetooth problems each have their own status")
     func bluetoothStates() {
         var state = ready

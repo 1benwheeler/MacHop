@@ -11,15 +11,17 @@ import Testing
 struct StatusPresentationTests {
     nonisolated static let all: [AppModel.Status] = [
         .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable("It broke"), .choosePhone,
-        .connecting, .waitingForPhone, .phoneAsleep, .ready, .controlling, .paused, .blocked(.macLocked)
+        .connecting, .waitingForPhone, .phoneAsleep, .ready, .controlling, .typingOnPhone, .paused, .blocked(.macLocked)
     ]
 
     @Test("Connected looks connected everywhere: green, the full menu-bar mark, a lit iPhone", arguments: all)
     func connected(status: AppModel.Status) {
-        let connected = status == .ready || status == .controlling
+        let connected = status == .ready || status == .controlling || status == .typingOnPhone
         #expect(status.isConnected == connected)
         #expect((status.colour == .green) == connected)
-        #expect((status.menuBarIcon == .mark) == connected)
+        // The mark, or a keyboard while typing goes to the iPhone with the pointer on the Mac.
+        #expect((status.menuBarIcon == .mark || status.menuBarIcon == .keyboard) == connected)
+        #expect((status.menuBarIcon == .keyboard) == (status == .typingOnPhone), "only that state shows the keyboard")
         #expect((status.stage != .offline) == connected)
     }
 
@@ -41,6 +43,9 @@ struct StatusPresentationTests {
         #expect(AppModel.Status.ready.title(phone: "iPhone1") == "Connected to iPhone1")
         #expect(AppModel.Status.controlling.title(phone: "iPhone1") == "Controlling iPhone1")
         #expect(AppModel.Status.phoneAsleep.title(phone: "iPhone1") == "iPhone1 Is Asleep")
+        #expect(AppModel.Status.typingOnPhone.title(phone: "iPhone1") == "Typing on iPhone1")
+        #expect(AppModel.Status.typingOnPhone.detail(side: .right, wakesPhone: false)
+                == "Click on your Mac, or press ⌃⌥⌘⎋, to type on your Mac again.")
         #expect(AppModel.Status.ready.detail(side: .bottom, wakesPhone: false) == "Move the pointer past the bottom edge of your screen.")
         #expect(AppModel.Status.phoneAsleep.detail(side: .right, wakesPhone: true) == "Move onto your iPhone to wake it.")
         #expect(AppModel.Status.phoneAsleep.detail(side: .right, wakesPhone: false) == "Wake your iPhone to use it.")
@@ -104,7 +109,7 @@ struct StatusPresentationTests {
     func mainButton() {
         let expected: [(AppModel.Status, String, Bool)] = [
             (.needsAccessibility, "Allow Access…", true), (.bluetoothDenied, "Open Bluetooth Settings…", false),
-            (.controlling, "Return to Mac", false), (.connecting, "Reconnect", false), (.waitingForPhone, "Reconnect", false),
+            (.controlling, "Return to Mac", false), (.typingOnPhone, "Return to Mac", false), (.connecting, "Reconnect", false), (.waitingForPhone, "Reconnect", false),
             (.paused, "Turn On", true), (.choosePhone, "Choose iPhone…", true), (.ready, "Turn Off", false),
             (.phoneAsleep, "Turn Off", false), (.blocked(.macLocked), "Turn Off", false),
             (.bluetoothOff, "Turn Off", false), (.bluetoothUnavailable("It broke"), "Turn Off", false)

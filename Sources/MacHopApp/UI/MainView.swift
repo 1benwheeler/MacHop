@@ -482,6 +482,12 @@ private struct SettingsPage: View {
                     Toggle("Media keys", isOn: model.binding(\.session.mediaKeysToPhone)).toggleStyle(.switch).labelsHidden()
                 }
                 RowDivider()
+                SettingRow(symbol: "keyboard", title: "Keep typing on iPhone until you click on your Mac",
+                           detail: "After you click on your iPhone, typing stays there when the pointer comes back, until you click on your Mac, switch apps or press ⌃⌥⌘⎋.") {
+                    Toggle("Keep typing on iPhone", isOn: model.binding(\.session.keyboardStaysOnPhone))
+                        .toggleStyle(.switch).labelsHidden()
+                }
+                RowDivider()
                 SettingRow(symbol: "arrow.left.arrow.right", title: "Jump to your iPhone and back",
                            detail: "Press ⌃⌥⌘⎋ to return to your Mac at any time.") {
                     KeyCaps(keys: "⌃⌥⌘I")

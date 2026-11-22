@@ -20,6 +20,7 @@ extension AppModel.Status {
     func title(phone: String) -> String {
         switch self {
         case .controlling: "Controlling \(phone)"
+        case .typingOnPhone: "Typing on \(phone)"
         case .ready: "Connected to \(phone)"
         case .paused: "MacHop Is Off"
         case .needsAccessibility: "Accessibility Permission Needed"
@@ -39,6 +40,7 @@ extension AppModel.Status {
         let side = side.rawValue
         switch self {
         case .controlling: return "Move back across the edge, or press ⌃⌥⌘⎋, to return."
+        case .typingOnPhone: return "Click on your Mac, or press ⌃⌥⌘⎋, to type on your Mac again."
         case .ready: return "Move the pointer past the \(side) edge of your screen."
         case .paused: return "Your keyboard and pointer only control this Mac."
         case .needsAccessibility: return "Allow MacHop in \(PrivacyPane.accessibilityPath())."
@@ -58,6 +60,7 @@ extension AppModel.Status {
     var shortText: String {
         switch self {
         case .controlling: "In use"
+        case .typingOnPhone: "Typing"
         case .ready: "Connected"
         case .paused: "Off"
         case .connecting, .waitingForPhone: "Connecting…"
@@ -72,6 +75,7 @@ extension AppModel.Status {
     func menuText(phone: String) -> String {
         switch self {
         case .controlling: "In use · ⌃⌥⌘⎋ returns to your Mac"
+        case .typingOnPhone: "Typing here · click on your Mac to stop"
         case .ready: "Connected"
         case .paused: "MacHop is off"
         case .connecting, .waitingForPhone: "Connecting…"
@@ -85,7 +89,7 @@ extension AppModel.Status {
     /// Green when connected, orange while waiting on something, red when something needs fixing.
     var colour: Color {
         switch self {
-        case .ready, .controlling: .green
+        case .ready, .controlling, .typingOnPhone: .green
         case .connecting, .waitingForPhone, .phoneAsleep, .choosePhone, .paused, .blocked: .orange
         case .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable: .red
         }
@@ -94,18 +98,21 @@ extension AppModel.Status {
     /// Connected to the iPhone: ready, or in use.
     var isConnected: Bool {
         switch self {
-        case .ready, .controlling: true
+        case .ready, .controlling, .typingOnPhone: true
         case .paused, .connecting, .waitingForPhone, .phoneAsleep, .choosePhone, .blocked,
              .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable: false
         }
     }
 
-    enum MenuBarIcon: Equatable { case mark, dimmedMark, warning }
+    enum MenuBarIcon: Equatable { case mark, dimmedMark, keyboard, warning }
 
-    /// MacHop's mark when connected, dimmed while it isn't, a warning sign when something needs fixing.
+    /// MacHop's mark when connected, dimmed while it isn't, a warning sign when something
+    /// needs fixing; and a keyboard while typing goes to the iPhone with the pointer on the
+    /// Mac, so it's always visible where the next key will land.
     var menuBarIcon: MenuBarIcon {
         switch self {
         case .ready, .controlling: .mark
+        case .typingOnPhone: .keyboard
         case .paused, .connecting, .waitingForPhone, .phoneAsleep, .choosePhone, .blocked: .dimmedMark
         case .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable: .warning
         }
@@ -115,7 +122,7 @@ extension AppModel.Status {
     var stage: DeviceStage.Status {
         switch self {
         case .controlling: .controlling
-        case .ready: .ready
+        case .ready, .typingOnPhone: .ready
         case .paused, .connecting, .waitingForPhone, .phoneAsleep, .choosePhone, .blocked,
              .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable: .offline
         }
@@ -145,7 +152,7 @@ extension AppModel.Status {
         switch self {
         case .needsAccessibility: .allowAccess
         case .bluetoothDenied: .openBluetoothSettings
-        case .controlling: .returnToMac
+        case .controlling, .typingOnPhone: .returnToMac
         case .connecting, .waitingForPhone: .reconnect
         case .paused: .turnOn
         case .choosePhone: .choosePhone
@@ -157,7 +164,7 @@ extension AppModel.Status {
     var opensWindowAtLaunch: Bool {
         switch self {
         case .needsAccessibility, .choosePhone, .bluetoothDenied: true
-        case .controlling, .ready, .paused, .connecting, .waitingForPhone, .phoneAsleep, .blocked,
+        case .controlling, .typingOnPhone, .ready, .paused, .connecting, .waitingForPhone, .phoneAsleep, .blocked,
              .bluetoothOff, .bluetoothUnavailable: false
         }
     }

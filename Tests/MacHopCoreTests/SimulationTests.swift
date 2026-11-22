@@ -149,10 +149,12 @@ struct SimulationTests {
         #expect(crossings == layoutsTested * 50)
     }
 
-    @Test("Random input never leaks to the Mac or leaves anything held", arguments: [1, 2, 3, 4, 5] as [UInt64])
-    func fuzz(seed: UInt64) {
+    @Test("Random input never leaks to the Mac or leaves anything held", arguments: [1, 2, 3, 4, 5] as [UInt64], [false, true])
+    func fuzz(seed: UInt64, keyboardStays: Bool) {
         var random = SeededRandom(seed: seed)
-        let sim = Simulation(profile: HIDProfile(HIDProfile.Variant.allCases[Int(seed) % 3]))
+        // The same 4,000 random steps, with and without typing staying on the iPhone.
+        let sim = Simulation(profile: HIDProfile(HIDProfile.Variant.allCases[Int(seed) % 3]),
+                             settings: SessionSettings(layout: PhoneLayout(displayID: 1), keyboardStaysOnPhone: keyboardStays))
         let modifierCodes: [UInt16] = [56, 59, 58, 55, 60, 62, 61, 54, 63]
         let keyCodes: [UInt16] = [0, 1, 2, 11, 12, 18, 36, 48, 49, 51, 123, 126, 122]
         for step in 0..<4000 {
@@ -224,7 +226,7 @@ struct SimulationTests {
         }
         for button in sim.heldButtons { sim.buttonUp(button) }
         sim.returnToMac()
-        checkQuiescent(sim, "seed \(seed) end")
+        checkQuiescent(sim, "seed \(seed)\(keyboardStays ? ", typing stays" : "") end")
     }
 
     @Test("Fast typing survives a congested link in order and with nothing lost")

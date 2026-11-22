@@ -19,6 +19,7 @@ macOS input ──► EventTap ──► InputSession ──► HIDTransport ─
 ## The rules that keep input safe
 
 - **A release always goes where the press went.** A key or button pressed on one side is released on that side, even if you've crossed in between. Nothing gets stuck down.
+- **Typing goes where the pointer is,** unless you choose otherwise. With "Keep typing on iPhone until you click on your Mac" on, once you've clicked on the iPhone the keyboard stays with it after the pointer returns, until you click on the Mac, switch apps, press ⌃⌥⌘⎋, or the iPhone becomes unavailable. The menu-bar icon shows a keyboard meanwhile.
 - **Gestures belong to where they started.** A scroll or swipe that began on the Mac finishes on the Mac, and momentum never leaks across. While you're on the iPhone, Mac gestures like Mission Control can't fire.
 - **Control comes back to the Mac whenever something's wrong.** That covers ⌃⌥⌘⎋, sleep, screen lock, Secure Input (a password field), Bluetooth dropping, or macOS pausing input capture. Anything held on the iPhone is released at once. While MacHop is on it also looks once a second for the things macOS doesn't announce: the Accessibility permission being turned off, a password field taking the keyboard, and an iPhone that is linked but not accepting input.
 

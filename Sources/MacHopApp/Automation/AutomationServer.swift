@@ -270,6 +270,11 @@ final class AutomationServer {
             transport.motionInterval = number("motionInterval", transport.motionInterval)
             return ["ok": true, "motionInterval": transport.motionInterval]
 
+        case "settings.keyboard":
+            // For lab runs: whether typing stays on the iPhone until a click on the Mac.
+            model.update { if let stays = request["stays"] as? Bool { $0.session.keyboardStaysOnPhone = stays } }
+            return ["ok": true, "stays": model.settings.session.keyboardStaysOnPhone]
+
         case "settings.scroll":
             model.update {
                 if let style = (request["style"] as? String).flatMap(ScrollStyle.init(rawValue:)) { $0.session.scroll.style = style }
@@ -314,6 +319,7 @@ final class AutomationServer {
         var result: [String: Any] = [
             "ok": true,
             "owner": session.owner == .phone ? "phone" : "mac",
+            "keyboard": session.keyboardOwner == .phone ? "phone" : "mac",
             "enabled": session.isEnabled,
             "disabledReason": session.disabledReason?.text ?? "",
             "ready": model.transport.isReady,
