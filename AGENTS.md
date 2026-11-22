@@ -17,7 +17,8 @@ Command Line Tools are enough; Xcode isn't needed.
 ## Ground rules
 
 - **Reliability first.** A simple feature that always works beats a clever one that sometimes doesn't.
-- **Test every behaviour change.** Decision logic lives in `MacHopCore` and is tested against the simulated iPhone in `VirtualPhone`. A bug fix should come with a test that fails without it.
+- **Test every behaviour change.** Decision logic lives in `MacHopCore` and is tested against the simulated iPhone in `VirtualPhone`. Decisions that depend on the Mac's own state live in plain values in `MacHopApp` (`Availability`, `Watchdog`) and are tested too. A bug fix should come with a test that fails without it.
+- **UI wording has one home.** What each status shows is in `UI/StatusPresentation.swift`; the reasons input is off are in `UI/ReasonText.swift`. `scripts/snapshot.sh` draws every page, and two runs can be compared byte for byte.
 - **Only claim it works on a real iPhone if someone saw it,** in the lab or by hand. Passing simulator tests aren't proof.
 - **Lab safety:** lab tests act only while Settings is showing on the iPhone (typing only in Notes). Never send typing or clicks to an iPhone screen you haven't checked.
 - **Security** (see [SECURITY.md](SECURITY.md)):

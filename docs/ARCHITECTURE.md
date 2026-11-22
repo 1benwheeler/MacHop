@@ -12,7 +12,7 @@ macOS input ──► EventTap ──► InputSession ──► HIDTransport ─
 | Module | What's in it |
 | --- | --- |
 | `MacHopCore` | All the decisions: `InputSession`, the edge geometry (`ScreenLink`), the Bluetooth report formats (`HIDProfile`), the send queue (`HIDTransport`). Pure Swift, no Apple frameworks, so it can be tested without hardware. |
-| `MacHopApp` | The macOS side: input capture, the hidden Mac cursor, Bluetooth, and the menu-bar app and window (SwiftUI). `Availability` decides, from the state of all of those, whether the iPhone may take input right now and what MacHop says about it; it's plain values, so it's tested too. |
+| `MacHopApp` | The macOS side: input capture, the hidden Mac cursor, Bluetooth, and the menu-bar app and window (SwiftUI). Two small value types hold its decisions, so they're tested too: `Availability` (may the iPhone take input right now, and what does MacHop say about it?) and `Watchdog` (what the once-a-second safety look does). |
 | `VirtualPhone` | A simulated iPhone that decodes MacHop's reports independently, used by the tests. |
 | `LabKit`, `machop-lab` | Tools for testing on a real iPhone (see [CONTRIBUTING.md](../CONTRIBUTING.md)). |
 
@@ -20,7 +20,7 @@ macOS input ──► EventTap ──► InputSession ──► HIDTransport ─
 
 - **A release always goes where the press went.** A key or button pressed on one side is released on that side, even if you've crossed in between. Nothing gets stuck down.
 - **Gestures belong to where they started.** A scroll or swipe that began on the Mac finishes on the Mac, and momentum never leaks across. While you're on the iPhone, Mac gestures like Mission Control can't fire.
-- **Control comes back to the Mac whenever something's wrong.** That covers ⌃⌥⌘⎋, sleep, screen lock, Secure Input (a password field), Bluetooth dropping, or macOS pausing input capture. Anything held on the iPhone is released at once.
+- **Control comes back to the Mac whenever something's wrong.** That covers ⌃⌥⌘⎋, sleep, screen lock, Secure Input (a password field), Bluetooth dropping, or macOS pausing input capture. Anything held on the iPhone is released at once. While MacHop is on it also looks once a second for the things macOS doesn't announce: the Accessibility permission being turned off, a password field taking the keyboard, and an iPhone that is linked but not accepting input.
 
 ## Crossing the edge
 
