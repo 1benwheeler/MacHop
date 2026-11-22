@@ -217,6 +217,14 @@ struct SettingsTests {
         }
     }
 
+    @Test("VoiceOver can move the iPhone to every edge the drawing offers")
+    func arrangementActions() {
+        let labels = Side.allCases.map(ArrangementActions.label(for:))
+        #expect(labels.allSatisfy { $0.hasPrefix("Move iPhone to the ") })
+        #expect(Set(labels).count == Side.allCases.count, "one distinct action per edge")
+        #expect(ArrangementActions.label(for: .bottom) == "Move iPhone to the bottom")
+    }
+
     @Test("Settings round-trip through storage")
     func roundTrip() throws {
         let defaults = try #require(UserDefaults(suiteName: "machop.tests.\(UUID().uuidString)"))

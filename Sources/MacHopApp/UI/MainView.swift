@@ -213,9 +213,10 @@ private struct PhonePage: View {
                 .accessibilityLabel("Arrangement: your Mac's screens and your iPhone")
                 .accessibilityValue(arrangementDescription)
                 .accessibilityActions {
-                    Button("Move iPhone to the left side") { model.update { $0.session.layout.side = .left } }
-                    Button("Move iPhone to the right side") { model.update { $0.session.layout.side = .right } }
-                    Button("Move iPhone to the top") { model.update { $0.session.layout.side = .top } }
+                    // Every edge the drawing can be dragged to, for people who can't drag.
+                    ForEach(Side.allCases, id: \.self) { side in
+                        Button(ArrangementActions.label(for: side)) { model.update { $0.session.layout.side = side } }
+                    }
                     Button(model.settings.session.layout.side.isHorizontal ? "Move iPhone left" : "Move iPhone up") { nudge(-0.1) }
                     Button(model.settings.session.layout.side.isHorizontal ? "Move iPhone right" : "Move iPhone down") { nudge(0.1) }
                 }
@@ -268,6 +269,18 @@ private struct PhonePage: View {
         case .paused: Button("Turn On") { model.togglePause() }.buttonStyle(.borderedProminent)
         case .choosePhone: Button("Choose iPhone…") { showingPhones = true }.buttonStyle(.borderedProminent)
         default: Button("Turn Off") { model.togglePause() }
+        }
+    }
+}
+
+/// VoiceOver's names for moving the iPhone to each screen edge without dragging.
+nonisolated enum ArrangementActions {
+    static func label(for side: Side) -> String {
+        switch side {
+        case .left: "Move iPhone to the left side"
+        case .right: "Move iPhone to the right side"
+        case .top: "Move iPhone to the top"
+        case .bottom: "Move iPhone to the bottom"
         }
     }
 }
