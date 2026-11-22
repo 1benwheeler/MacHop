@@ -235,6 +235,15 @@ struct SettingsTests {
                 "someone who switched it off doesn't get it switched back on by reopening the guide")
     }
 
+    @Test("The layout choice shows for the lab, and for anyone already on another layout so they can get back")
+    func layoutChoice() {
+        var settings = AppSettings.defaultSettings(mainDisplay: 1)
+        #expect(!settings.offersLayoutChoice(labEnabled: false))
+        #expect(settings.offersLayoutChoice(labEnabled: true))
+        settings.profile = .relative
+        #expect(settings.offersLayoutChoice(labEnabled: false))
+    }
+
     @Test("An animated change always happens, with or without Reduce Motion")
     func motion() {
         var changed = false

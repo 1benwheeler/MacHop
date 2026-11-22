@@ -487,16 +487,19 @@ private struct SettingsPage: View {
             }
             sectionTitle("Advanced")
             Panel {
-                SettingRow(symbol: "keyboard", title: "Keyboard and pointer layout",
-                           detail: "Changing it briefly reconnects your iPhone. Compatibility is the one tested on iPhone.") {
-                    Picker("Layout", selection: model.binding(\.profile)) {
-                        Text("Compatibility").tag(HIDProfile.Variant.compatibility)
-                        Text("Standard").tag(HIDProfile.Variant.standard)
-                        Text("Relative pointer").tag(HIDProfile.Variant.relative)
+                // Only Compatibility has been tested on an iPhone, so the choice is for the lab.
+                if model.settings.offersLayoutChoice(labEnabled: AutomationServer.isEnabled) {
+                    SettingRow(symbol: "keyboard", title: "Keyboard and pointer layout",
+                               detail: "Changing it briefly reconnects your iPhone. Compatibility is the one tested on iPhone.") {
+                        Picker("Layout", selection: model.binding(\.profile)) {
+                            Text("Compatibility").tag(HIDProfile.Variant.compatibility)
+                            Text("Standard").tag(HIDProfile.Variant.standard)
+                            Text("Relative pointer").tag(HIDProfile.Variant.relative)
+                        }
+                        .labelsHidden().frame(width: 170)
                     }
-                    .labelsHidden().frame(width: 170)
+                    RowDivider()
                 }
-                RowDivider()
                 SettingRow(symbol: "chart.bar", title: "Diagnostics",
                            detail: "For bug reports. Never includes names, keys or anything you type.") {
                     DiagnosticsButtons(model: model)

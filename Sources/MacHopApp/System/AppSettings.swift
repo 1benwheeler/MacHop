@@ -29,6 +29,13 @@ nonisolated struct AppSettings: Codable, Equatable {
     /// existed count as set up once an iPhone has been chosen.
     var needsSetup: Bool { !(setupFinished ?? (phoneID != nil)) }
 
+    /// Whether Settings offers the keyboard and pointer layouts. Only Compatibility has been
+    /// tested on an iPhone, so the others are for the lab. Anyone already on another layout
+    /// still sees the choice, so they can get back.
+    func offersLayoutChoice(labEnabled: Bool) -> Bool {
+        labEnabled || profile != .compatibility
+    }
+
     static let key = "settings.v1"
 
     static func defaultSettings(mainDisplay: UInt32) -> AppSettings {
