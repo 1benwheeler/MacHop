@@ -17,4 +17,6 @@ if [[ "$developer_dir" == *CommandLineTools* ]]; then
            -Xlinker -rpath -Xlinker "$frameworks"
            -Xswiftc -plugin-path -Xswiftc "$developer_dir/usr/lib/swift/host/plugins/testing")
 fi
-exec swift test "${flags[@]}" "$@"
+# (macOS's bash 3.2 treats an empty "${flags[@]}" as unbound, which is the case with
+# full Xcode, hence the guard.)
+exec swift test ${flags[@]+"${flags[@]}"} "$@"
