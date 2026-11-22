@@ -269,22 +269,3 @@ extension MacHopCore.Rect {
         return MacHopCore.Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 }
-
-extension AppModel {
-    var stageState: DeviceStage.Status {
-        switch status {
-        case .controlling: .controlling
-        case .ready: .ready
-        default: .offline
-        }
-    }
-
-    /// Colour for the status pill.
-    var statusColour: Color {
-        switch status {
-        case .ready, .controlling: .green
-        case .connecting, .waitingForPhone, .phoneAsleep, .choosePhone, .paused, .blocked: .orange
-        default: .red
-        }
-    }
-}

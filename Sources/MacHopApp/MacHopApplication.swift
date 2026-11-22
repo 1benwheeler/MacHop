@@ -81,10 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             showSetup()
             return
         }
-        switch model.status {
-        case .needsAccessibility, .choosePhone, .bluetoothDenied: showWindow(page: .phone)
-        default: break
-        }
+        if model.status.opensWindowAtLaunch { showWindow(page: .phone) }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

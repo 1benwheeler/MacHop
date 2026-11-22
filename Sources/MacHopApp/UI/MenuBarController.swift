@@ -37,15 +37,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private func updateIcon() {
         let title = StatusText.title(model)
-        var dimmed = false
+        let icon = model.status.menuBarIcon
+        let dimmed = icon == .dimmedMark
         let image: NSImage?
-        switch model.status {
-        case .ready, .controlling:
+        switch icon {
+        case .mark, .dimmedMark:
             image = Self.mark
-        case .paused, .connecting, .waitingForPhone, .phoneAsleep, .choosePhone, .blocked:
-            image = Self.mark
-            dimmed = true
-        case .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable:
+        case .warning:
             image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)
             image?.isTemplate = true
         }
@@ -141,45 +139,6 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func quit() { NSApp.terminate(nil) }
 }
 
-/// Human-readable status, shared by the menu and the settings window.
-enum StatusText {
-    static func title(_ model: AppModel) -> String {
-        switch model.status {
-        case .controlling: "Controlling \(model.phoneName)"
-        case .ready: "Connected to \(model.phoneName)"
-        case .paused: "MacHop Is Off"
-        case .needsAccessibility: "Accessibility Permission Needed"
-        case .bluetoothOff: "Bluetooth Is Off"
-        case .bluetoothDenied: "Bluetooth Permission Needed"
-        case .bluetoothUnavailable: "Bluetooth Unavailable"
-        case .choosePhone: "Choose Your iPhone"
-        case .connecting: "Connecting to \(model.phoneName)…"
-        case .waitingForPhone: "Waiting for \(model.phoneName)…"
-        case .phoneAsleep: "\(model.phoneName) Is Asleep"
-        case .blocked: "Input Stays on Your Mac"
-        }
-    }
-
-    static func detail(_ model: AppModel) -> String {
-        let side = model.settings.session.layout.side.rawValue
-        switch model.status {
-        case .controlling: return "Move back across the edge, or press ⌃⌥⌘⎋, to return."
-        case .ready: return "Move the pointer past the \(side) edge of your screen."
-        case .paused: return "Your keyboard and pointer only control this Mac."
-        case .needsAccessibility: return "Allow MacHop in System Settings → Privacy & Security → Accessibility."
-        case .bluetoothOff: return "Turn on Bluetooth to connect to your iPhone."
-        case .bluetoothDenied: return "Allow MacHop in System Settings → Privacy & Security → Bluetooth."
-        case .bluetoothUnavailable(let message): return message
-        case .choosePhone: return "Choose your iPhone to get started."
-        case .connecting: return "Keep your iPhone nearby and unlocked."
-        case .waitingForPhone: return "Your iPhone is linked; waiting for it to accept the keyboard and pointer."
-        case .phoneAsleep:
-            return model.settings.wakesPhone == true ? "Move onto your iPhone to wake it." : "Wake your iPhone to use it."
-        case .blocked(let reason): return reason
-        }
-    }
-}
-
 /// "MacHop" with a switch that turns it on or off (pauses it), like Control Centre's Wi-Fi menu.
 private struct MenuHeader: View {
     let model: AppModel
@@ -260,20 +219,9 @@ private struct MenuDeviceRow: View {
         .accessibilityLabel("\(model.phoneName), \(state)")
     }
 
-    private var active: Bool { model.status == .ready || model.status == .controlling }
+    private var active: Bool { model.status.isConnected }
 
-    private var state: String {
-        switch model.status {
-        case .controlling: "In use · ⌃⌥⌘⎋ returns to your Mac"
-        case .ready: "Connected"
-        case .paused: "MacHop is off"
-        case .connecting, .waitingForPhone: "Connecting…"
-        case .phoneAsleep: "Asleep"
-        case .choosePhone: "Choose your iPhone to begin"
-        case .blocked(let reason): reason
-        default: StatusText.title(model)
-        }
-    }
+    private var state: String { model.status.menuText(phone: model.phoneName) }
 }
 
 extension MenuBarController {

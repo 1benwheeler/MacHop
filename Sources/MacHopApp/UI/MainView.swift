@@ -97,24 +97,11 @@ private struct Sidebar: View {
                     .lineLimit(1)
                 HStack(spacing: 5) {
                     Circle().fill(model.statusColour).frame(width: 7, height: 7)
-                    Text(shortStatus).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(model.status.shortText).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
         }
         .accessibilityElement(children: .combine)
-    }
-
-    private var shortStatus: String {
-        switch model.status {
-        case .controlling: "In use"
-        case .ready: "Connected"
-        case .paused: "Off"
-        case .connecting, .waitingForPhone: "Connecting…"
-        case .phoneAsleep: "Asleep"
-        case .choosePhone: "Not set up"
-        case .blocked: "On hold"
-        default: "Needs attention"
-        }
     }
 
     private func item(_ page: Navigation.Page, _ title: String, _ symbol: String) -> some View {
@@ -260,15 +247,24 @@ private struct PhonePage: View {
         }
     }
 
+    /// The one button that fits the current state.
     @ViewBuilder private var primaryActions: some View {
-        switch model.status {
-        case .needsAccessibility: Button("Allow Access…") { model.requestAccessibility() }.buttonStyle(.borderedProminent)
-        case .bluetoothDenied: Button("Open Bluetooth Settings…") { model.openBluetoothSettings() }
-        case .controlling: Button("Return to Mac") { model.returnToMac() }
-        case .connecting, .waitingForPhone: Button("Reconnect") { model.reconnect() }
-        case .paused: Button("Turn On") { model.togglePause() }.buttonStyle(.borderedProminent)
-        case .choosePhone: Button("Choose iPhone…") { showingPhones = true }.buttonStyle(.borderedProminent)
-        default: Button("Turn Off") { model.togglePause() }
+        let action = model.status.mainAction
+        if action.isProminent {
+            Button(action.title) { perform(action) }.buttonStyle(.borderedProminent)
+        } else {
+            Button(action.title) { perform(action) }
+        }
+    }
+
+    private func perform(_ action: AppModel.Status.MainAction) {
+        switch action {
+        case .allowAccess: model.requestAccessibility()
+        case .openBluetoothSettings: model.openBluetoothSettings()
+        case .returnToMac: model.returnToMac()
+        case .reconnect: model.reconnect()
+        case .turnOn, .turnOff: model.togglePause()
+        case .choosePhone: showingPhones = true
         }
     }
 }
