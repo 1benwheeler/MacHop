@@ -63,8 +63,7 @@ final class AppModel {
     @ObservationIgnored let dryRun = CommandLine.arguments.contains("--dry-run")
 
     init() {
-        let displays = SystemMonitor.displays()
-        let settings = AppSettings.load(mainDisplay: displays.first?.id ?? CGMainDisplayID(), displays: displays)
+        let settings = AppSettings.load(mainDisplay: SystemMonitor.displays().first?.id ?? CGMainDisplayID())
         self.settings = settings
         let transport = HIDTransport(profile: HIDProfile(settings.profile), scheduler: scheduler)
         self.transport = transport
@@ -170,7 +169,7 @@ final class AppModel {
     // MARK: Sleep
 
     /// Whether Bluetooth has let go of the iPhone because the Mac is asleep.
-    private var bluetoothAsleep = false
+    @ObservationIgnored private var bluetoothAsleep = false
 
     /// While the Mac sleeps, MacHop lets go of the iPhone completely: the link drops and
     /// the keyboard-and-pointer service is withdrawn. Otherwise the Mac's background wakes

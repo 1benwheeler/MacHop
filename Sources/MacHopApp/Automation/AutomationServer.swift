@@ -61,7 +61,8 @@ final class AutomationServer {
             return
         }
         listener = fd
-        Log.automation.notice("Automation enabled at \(path, privacy: .public)")
+        // (Not the socket's path: it contains the account name.)
+        Log.automation.notice("Automation enabled")
         queue.async { [weak self] in self?.acceptLoop(fd) }
     }
 
@@ -81,11 +82,7 @@ final class AutomationServer {
             guard client >= 0 else { return }
             guard Self.isTrusted(client) else {
                 close(client)
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        Log.automation.error("Refused an automation connection from a program not signed like MacHop")
-                    }
-                }
+                Log.automation.error("Refused an automation connection from a program not signed like MacHop")
                 continue
             }
             Thread.detachNewThread { [weak self] in self?.serve(client) }

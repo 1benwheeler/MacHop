@@ -42,7 +42,7 @@ nonisolated struct AppSettings: Codable, Equatable {
     /// Loads saved settings, or the defaults on first launch. Settings that can't be read
     /// (damaged, or saved by a newer MacHop with an option this one doesn't know) also
     /// give the defaults, but a copy is kept and the failure is logged.
-    static func load(defaults: UserDefaults = .standard, mainDisplay: UInt32, displays: [Display] = []) -> AppSettings {
+    static func load(defaults: UserDefaults = .standard, mainDisplay: UInt32) -> AppSettings {
         guard let data = defaults.data(forKey: key) else { return defaultSettings(mainDisplay: mainDisplay) }
         do {
             var settings = try JSONDecoder().decode(AppSettings.self, from: data)

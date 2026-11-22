@@ -162,6 +162,7 @@ struct GATTTests {
     }
 }
 
+@MainActor
 @Suite("Settings")
 struct SettingsTests {
     @Test("Settings saved before gestures existed still load, with gestures on")
