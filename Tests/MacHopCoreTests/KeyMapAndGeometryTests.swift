@@ -164,79 +164,6 @@ struct GeometryTests {
         #expect(PhoneLayout(displayID: 1, size: 10, aspectRatio: -3).sanitized().aspectRatio == 0.3)
         #expect(PhoneLayout(displayID: 1, size: 10).sanitized().size == PhoneLayout.sizeRange.lowerBound)
     }
-}
-
-@Suite("Scroll conversion")
-struct ScrollConverterTests {
-    @Test("Trackpad points become whole steps with the remainder carried")
-    func remainderCarried() {
-        var converter = ScrollConverter()
-        let settings = ScrollSettings(speed: 1)
-        var total = 0
-        // 150 points in 1-point events = 5 steps at 30 points per step.
-        for _ in 0..<150 {
-            total += converter.convert(ScrollInput(dy: -1, continuous: true, phase: .changed), settings: settings).wheel
-        }
-        #expect(total == 5)
-    }
-
-    @Test("Direction follows the Mac by default and can be reversed")
-    func direction() {
-        var converter = ScrollConverter()
-        let up = ScrollInput(dy: 30, continuous: true, phase: .changed)
-        #expect(converter.convert(up, settings: ScrollSettings()).wheel == -1)
-        #expect(converter.convert(up, settings: ScrollSettings(reversed: true)).wheel == 1)
-        #expect(converter.convert(ScrollInput(dy: 3, continuous: false), settings: ScrollSettings()).wheel == -3)
-    }
-
-    @Test("Reversing direction discards the opposite remainder")
-    func reversal() {
-        var converter = ScrollConverter()
-        let settings = ScrollSettings()
-        _ = converter.convert(ScrollInput(dy: 29, continuous: true, phase: .changed), settings: settings)
-        // Without the reset, 29 points of earlier movement would cancel this.
-        #expect(converter.convert(ScrollInput(dy: -30, continuous: true, phase: .changed), settings: settings).wheel == 1)
-    }
-
-    @Test("Momentum can be turned off, horizontal follows its setting")
-    func options() {
-        var converter = ScrollConverter()
-        let momentum = ScrollInput(dx: 120, dy: 120, continuous: true, momentum: .changed)
-        #expect(converter.convert(momentum, settings: ScrollSettings(momentum: false)).isZero)
-        let both = converter.convert(momentum, settings: ScrollSettings(horizontal: false))
-        #expect(both.wheel == -1 && both.pan == 0)
-        #expect(converter.convert(momentum, settings: ScrollSettings()).pan == 1)
-    }
-
-    @Test("Momentum passes on a quarter of the glide, so a flick doesn't run away")
-    func momentumShare() {
-        var converter = ScrollConverter()
-        var total = 0
-        // 1,200 points of momentum in 30-point events: a quarter is 300 points, 10 steps.
-        for _ in 0..<40 {
-            total += converter.convert(ScrollInput(dy: -30, continuous: true, momentum: .changed), settings: ScrollSettings()).wheel
-        }
-        #expect(total == 10)
-    }
-
-    @Test("Trackpad scrolling sends one step per event; a burst waits its turn, then the excess is dropped")
-    func oneStepPerEvent() {
-        var converter = ScrollConverter()
-        let settings = ScrollSettings()
-        // One event worth 10 steps: 1 now, 3 carried over the next events, the rest dropped.
-        var steps = [converter.convert(ScrollInput(dy: -300, continuous: true, phase: .changed), settings: settings).wheel]
-        for _ in 0..<6 { steps.append(converter.convert(ScrollInput(dy: 0, continuous: true, phase: .changed), settings: settings).wheel) }
-        #expect(steps == [1, 1, 1, 1, 0, 0, 0])
-        // A mouse wheel's lines aren't limited.
-        #expect(converter.convert(ScrollInput(dy: -5, continuous: false), settings: settings).wheel == 5)
-    }
-
-    @Test("Absurd input is dropped rather than overflowing")
-    func absurdInput() {
-        var converter = ScrollConverter()
-        #expect(converter.convert(ScrollInput(dy: .infinity, continuous: true), settings: ScrollSettings()).isZero)
-        #expect(converter.convert(ScrollInput(dy: 1e12, continuous: true), settings: ScrollSettings()).isZero)
-    }
 
     // MARK: Top edge
 
@@ -332,5 +259,78 @@ struct ScrollConverterTests {
             let a = upright.screenFraction(x: 0.2, y: 0.7), b = flipped.screenFraction(x: 0.2, y: 0.7)
             #expect(abs(a.x + b.x - 1) < 1e-9 && abs(a.y + b.y - 1) < 1e-9)
         }
+    }
+}
+
+@Suite("Scroll conversion")
+struct ScrollConverterTests {
+    @Test("Trackpad points become whole steps with the remainder carried")
+    func remainderCarried() {
+        var converter = ScrollConverter()
+        let settings = ScrollSettings(speed: 1)
+        var total = 0
+        // 150 points in 1-point events = 5 steps at 30 points per step.
+        for _ in 0..<150 {
+            total += converter.convert(ScrollInput(dy: -1, continuous: true, phase: .changed), settings: settings).wheel
+        }
+        #expect(total == 5)
+    }
+
+    @Test("Direction follows the Mac by default and can be reversed")
+    func direction() {
+        var converter = ScrollConverter()
+        let up = ScrollInput(dy: 30, continuous: true, phase: .changed)
+        #expect(converter.convert(up, settings: ScrollSettings()).wheel == -1)
+        #expect(converter.convert(up, settings: ScrollSettings(reversed: true)).wheel == 1)
+        #expect(converter.convert(ScrollInput(dy: 3, continuous: false), settings: ScrollSettings()).wheel == -3)
+    }
+
+    @Test("Reversing direction discards the opposite remainder")
+    func reversal() {
+        var converter = ScrollConverter()
+        let settings = ScrollSettings()
+        _ = converter.convert(ScrollInput(dy: 29, continuous: true, phase: .changed), settings: settings)
+        // Without the reset, 29 points of earlier movement would cancel this.
+        #expect(converter.convert(ScrollInput(dy: -30, continuous: true, phase: .changed), settings: settings).wheel == 1)
+    }
+
+    @Test("Momentum can be turned off, horizontal follows its setting")
+    func options() {
+        var converter = ScrollConverter()
+        let momentum = ScrollInput(dx: 120, dy: 120, continuous: true, momentum: .changed)
+        #expect(converter.convert(momentum, settings: ScrollSettings(momentum: false)).isZero)
+        let both = converter.convert(momentum, settings: ScrollSettings(horizontal: false))
+        #expect(both.wheel == -1 && both.pan == 0)
+        #expect(converter.convert(momentum, settings: ScrollSettings()).pan == 1)
+    }
+
+    @Test("Momentum passes on a quarter of the glide, so a flick doesn't run away")
+    func momentumShare() {
+        var converter = ScrollConverter()
+        var total = 0
+        // 1,200 points of momentum in 30-point events: a quarter is 300 points, 10 steps.
+        for _ in 0..<40 {
+            total += converter.convert(ScrollInput(dy: -30, continuous: true, momentum: .changed), settings: ScrollSettings()).wheel
+        }
+        #expect(total == 10)
+    }
+
+    @Test("Trackpad scrolling sends one step per event; a burst waits its turn, then the excess is dropped")
+    func oneStepPerEvent() {
+        var converter = ScrollConverter()
+        let settings = ScrollSettings()
+        // One event worth 10 steps: 1 now, 3 carried over the next events, the rest dropped.
+        var steps = [converter.convert(ScrollInput(dy: -300, continuous: true, phase: .changed), settings: settings).wheel]
+        for _ in 0..<6 { steps.append(converter.convert(ScrollInput(dy: 0, continuous: true, phase: .changed), settings: settings).wheel) }
+        #expect(steps == [1, 1, 1, 1, 0, 0, 0])
+        // A mouse wheel's lines aren't limited.
+        #expect(converter.convert(ScrollInput(dy: -5, continuous: false), settings: settings).wheel == 5)
+    }
+
+    @Test("Absurd input is dropped rather than overflowing")
+    func absurdInput() {
+        var converter = ScrollConverter()
+        #expect(converter.convert(ScrollInput(dy: .infinity, continuous: true), settings: ScrollSettings()).isZero)
+        #expect(converter.convert(ScrollInput(dy: 1e12, continuous: true), settings: ScrollSettings()).isZero)
     }
 }
