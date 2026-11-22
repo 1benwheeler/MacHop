@@ -7,11 +7,13 @@ cd "$(dirname "$0")/.."
 app="build/MacHop Lab.app"
 # Build every time (quick when nothing changed), so the lab always matches the sources.
 swift build -c release --product machop-lab >/dev/null
+# Ask SwiftPM where it put the tool; the folder differs between toolchains.
+tool="$(swift build -c release --product machop-lab --show-bin-path)/machop-lab"
 rebuild=false
 [[ "${1:-}" == "--rebuild" ]] && rebuild=true && shift
-if [[ $rebuild == true || ! -d "$app" || .build/release/machop-lab -nt "$app/Contents/MacOS/machop-lab" ]]; then
+if [[ $rebuild == true || ! -d "$app" || "$tool" -nt "$app/Contents/MacOS/machop-lab" ]]; then
     rm -rf "$app" && mkdir -p "$app/Contents/MacOS"
-    cp .build/release/machop-lab "$app/Contents/MacOS/"
+    cp "$tool" "$app/Contents/MacOS/"
     cp Resources/Lab/Info.plist "$app/Contents/"
     # An unsigned lab is refused by MacHop, so don't leave one behind.
     scripts/sign.sh "$app" local.machop.lab >/dev/null || { rm -rf "$app"; exit 1; }
