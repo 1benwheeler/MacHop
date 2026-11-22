@@ -80,7 +80,7 @@ struct DeviceStage: View {
                 }
                 guard let centre = dragCentre,
                       let snapped = ScreenLink.snappedLayout(centre: centre, base: layout, displays: displays) else { return }
-                withAnimation(.snappy) { onArrange?(snapped) }
+                Motion.animate { onArrange?(snapped) }
             }
     }
 

@@ -307,7 +307,7 @@ struct ArrangementControls: View {
                 }
                 .pickerStyle(.segmented).labelsHidden().frame(width: 190)
                 Button {
-                    withAnimation(.snappy) { model.update { $0.session.layout.flipped.toggle() } }
+                    Motion.animate { model.update { $0.session.layout.flipped.toggle() } }
                 } label: {
                     Label("Flip", systemImage: "arrow.triangle.2.circlepath")
                 }

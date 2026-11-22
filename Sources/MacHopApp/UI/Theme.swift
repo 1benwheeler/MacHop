@@ -23,6 +23,16 @@ enum Theme {
     }
 }
 
+/// MacHop's animations are short touches. With Reduce Motion switched on in macOS, changes
+/// simply happen.
+enum Motion {
+    static var isReduced: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
+    static func animate(_ animation: Animation = .snappy, _ changes: () -> Void) {
+        if isReduced { changes() } else { withAnimation(animation, changes) }
+    }
+}
+
 /// Small spaced capitals, then a large title and an optional subtitle (as in Duet's headers).
 struct PageHeader: View {
     let overline: String

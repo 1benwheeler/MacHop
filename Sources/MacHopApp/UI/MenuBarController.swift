@@ -173,7 +173,7 @@ private struct MenuSwitchStyle: ToggleStyle {
                     .frame(width: 26, height: 16)
                     .padding(2)
             }
-            .animation(.snappy(duration: 0.18), value: on)
+            .animation(Motion.isReduced ? nil : .snappy(duration: 0.18), value: on)
             .contentShape(Capsule())
             .onTapGesture { configuration.isOn.toggle() }
             .accessibilityElement()

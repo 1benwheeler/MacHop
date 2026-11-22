@@ -44,7 +44,7 @@ struct SetupGuideView: View {
             }
             .onChange(of: current) { _, _ in
                 // Progress moves on to the next step, even from one that was clicked.
-                withAnimation(.snappy) { expanded = nil }
+                Motion.animate { expanded = nil }
             }
             Rectangle().fill(Theme.border).frame(height: 1)
             footer
@@ -100,7 +100,7 @@ struct SetupGuideView: View {
                 let done = isDone(step)
                 let selected = step == shown
                 Button {
-                    withAnimation(.snappy) { expanded = step == current ? nil : step }
+                    Motion.animate { expanded = step == current ? nil : step }
                 } label: {
                     VStack(spacing: 8) {
                         ZStack {
@@ -273,7 +273,7 @@ struct SetupGuideView: View {
             explain("AssistiveTouch shows the pointer on your iPhone. On your iPhone, open:")
             SettingsPath(parts: ["Settings", "Accessibility", "Touch", "AssistiveTouch"], then: "and turn it on.")
             if !isDone(.assistiveTouch) {
-                Button("It's On") { withAnimation { assistiveTouchOn = true } }.buttonStyle(.borderedProminent)
+                Button("It's On") { Motion.animate(.default) { assistiveTouchOn = true } }.buttonStyle(.borderedProminent)
             }
         case .tryIt:
             let side = model.settings.session.layout.side.rawValue
@@ -314,8 +314,8 @@ struct SetupGuideView: View {
         }
         HStack {
             if model.settings.gestureSetup == nil {
-                Button("Already Set Up") { withAnimation { model.update { $0.gestureSetup = .done } } }
-                Button("Skip") { withAnimation { model.update { $0.gestureSetup = .skipped } } }
+                Button("Already Set Up") { Motion.animate(.default) { model.update { $0.gestureSetup = .done } } }
+                Button("Skip") { Motion.animate(.default) { model.update { $0.gestureSetup = .skipped } } }
             }
             if !gesturesSent.isEmpty || model.settings.gestureSetup != nil {
                 Button("Start Over") {

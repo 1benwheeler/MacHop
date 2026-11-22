@@ -226,6 +226,13 @@ struct SettingsTests {
         #expect(ArrangementActions.label(for: .bottom) == "Move iPhone to the bottom")
     }
 
+    @Test("An animated change always happens, with or without Reduce Motion")
+    func motion() {
+        var changed = false
+        Motion.animate { changed = true }
+        #expect(changed)
+    }
+
     @Test("Settings round-trip through storage")
     func roundTrip() throws {
         let defaults = try #require(UserDefaults(suiteName: "machop.tests.\(UUID().uuidString)"))
