@@ -27,7 +27,33 @@ final class EventTap {
     private var source: CFRunLoopSource?
     private(set) var isRunning = false
 
-    static var accessibilityGranted: Bool { AXIsProcessTrusted() }
+    /// Whether macOS will let MacHop capture input right now. `AXIsProcessTrusted` alone
+    /// can go on saying yes after the permission is turned off in a running app (reported
+    /// by developers, 2023 to 2026), and an event tap left running then can stop all
+    /// keyboard and mouse input. So while it says yes, MacHop also checks that it could
+    /// still create a tap.
+    static var accessibilityGranted: Bool { AXIsProcessTrusted() && canCreateTap() }
+
+    private static var lastProbe: (time: Double, allowed: Bool)?
+
+    /// Creates a tap for an event that doesn't occur (a graphics tablet's pen coming into
+    /// range) and removes it at once; macOS refuses to create one without the permission.
+    /// Never called unless `AXIsProcessTrusted` says yes, so it can't raise a permission
+    /// prompt. The answer is reused for half a second.
+    private static func canCreateTap() -> Bool {
+        let now = ProcessInfo.processInfo.systemUptime
+        if let lastProbe, now - lastProbe.time < 0.5 { return lastProbe.allowed }
+        let mask = CGEventMask(1) << CGEventMask(CGEventType.tabletProximity.rawValue)
+        let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .tailAppendEventTap, options: .defaultTap,
+                                     eventsOfInterest: mask, callback: { _, _, event, _ in Unmanaged.passUnretained(event) },
+                                     userInfo: nil)
+        if let port {
+            CGEvent.tapEnable(tap: port, enable: false)
+            CFMachPortInvalidate(port)
+        }
+        lastProbe = (now, port != nil)
+        return port != nil
+    }
 
     @discardableResult
     func start() -> Bool {
