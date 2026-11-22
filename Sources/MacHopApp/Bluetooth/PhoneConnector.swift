@@ -68,6 +68,7 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     private var connectedAt: Double?
     private var retryScheduled = false
     private var searchToken = 0
+    private let scheduler = MainScheduler()
 
     func start() {
         guard manager == nil else { return }
@@ -94,11 +95,9 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         isSearching = true
         searchToken += 1
         let token = searchToken
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self, self.searchToken == token else { return }
-                self.stopSearch()
-            }
+        scheduler.after(duration) { [weak self] in
+            guard let self, self.searchToken == token else { return }
+            self.stopSearch()
         }
         onChange?()
     }
@@ -179,12 +178,10 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         let delay = Self.retryDelay(afterFailures: failures)
         guard !retryScheduled else { return }
         retryScheduled = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.retryScheduled = false
-                self.update()
-            }
+        scheduler.after(delay) { [weak self] in
+            guard let self else { return }
+            self.retryScheduled = false
+            self.update()
         }
     }
 

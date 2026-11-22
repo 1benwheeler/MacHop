@@ -49,11 +49,9 @@ final class AppModel {
     @ObservationIgnored private let tap = EventTap()
     @ObservationIgnored let cursor = SystemCursor()
     @ObservationIgnored private let monitor = SystemMonitor()
-    @ObservationIgnored private var linkCheckPending = false
-    @ObservationIgnored private var linkAttempts = 0
+    @ObservationIgnored private var watchdog = Watchdog()
+    @ObservationIgnored private var watchScheduled = false
     @ObservationIgnored private var noticeToken = 0
-    @ObservationIgnored private var pollingAccessibility = false
-    @ObservationIgnored private var watchingAccessibility = false
     @ObservationIgnored private var ownershipPeriod = 0
     @ObservationIgnored private var traceUntil = 0.0
     @ObservationIgnored private var stopping = false
@@ -211,16 +209,14 @@ final class AppModel {
         } else {
             tap.stop()
         }
-        if !accessibilityGranted { pollForAccessibility() }
-        if tap.isRunning { watchAccessibility() }
         phoneReady = transport.isReady
         subscriptions = transport.subscribedReports.count
         stats = transport.stats
         let availability = self.availability
         session.mayWakePhone = availability.mayWakePhone
         session.setEnabled(availability.disabledReason == nil, reason: availability.disabledReason)
-        if transport.isReady { linkAttempts = 0 }
-        watchLink()
+        if transport.isReady { watchdog.linkRecovered() }
+        keepWatch()
     }
 
     /// The facts the availability decision draws on, as they stand now.
@@ -244,15 +240,14 @@ final class AppModel {
         tap.traceGestures = owner == .phone && AutomationServer.isEnabled
         if owner == .phone {
             if settings.hasCrossed != true { update { $0.hasCrossed = true } }
-            watchWhilePhoneOwnsInput()
+            keepWatch()
             // A Space switch that was still animating when you crossed can show the
             // cursor again just after: hide it once more.
+            ownershipPeriod += 1
             let period = ownershipPeriod
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self, self.owner == .phone, self.ownershipPeriod == period else { return }
-                    self.cursor.reassertHidden()
-                }
+            scheduler.after(0.6) { [weak self] in
+                guard let self, self.owner == .phone, self.ownershipPeriod == period else { return }
+                self.cursor.reassertHidden()
             }
         } else {
             // Anything still physically held on return stays swallowed until released.
@@ -318,13 +313,11 @@ final class AppModel {
         session.reconcile(keysDown: held.keys, buttonsDown: held.buttons)
         guard !revived else { return }
         tap.stop()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let held = EventTap.physicallyHeld()
-                self.session.reconcile(keysDown: held.keys, buttonsDown: held.buttons)
-                self.refresh()
-            }
+        scheduler.after(1) { [weak self] in
+            guard let self else { return }
+            let held = EventTap.physicallyHeld()
+            self.session.reconcile(keysDown: held.keys, buttonsDown: held.buttons)
+            self.refresh()
         }
     }
 
@@ -341,85 +334,53 @@ final class AppModel {
         refresh()
     }
 
-    /// If the link is up but the phone never subscribes, restart the link a few
-    /// times, then tell the user. One check at a time, so reconnects can't keep
-    /// postponing it.
-    private func watchLink() {
-        guard !linkCheckPending, availability.watchesLink else { return }
-        linkCheckPending = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.linkCheckPending = false
-                guard !self.transport.isSuspended else { return }
-                guard !self.transport.isReady, self.settings.phoneID != nil, !self.dryRun else { return }
-                self.linkAttempts += 1
-                switch Availability.linkWatchAction(attempt: self.linkAttempts) {
-                case .reconnect:
-                    self.connector.reconnect()
-                case .tellUser:
-                    self.show(notice: "\(self.phoneName) is in range but has not accepted MacHop as a keyboard. " +
-                              "Check that Bluetooth and AssistiveTouch are on, then try Reconnect.")
-                case .wait:
-                    break
-                }
-                self.watchLink()
-            }
+    // MARK: Watching
+
+    /// While anything needs watching, MacHop looks once a second: is Accessibility still
+    /// allowed (or allowed at last), has a password field or a dead tap taken the keyboard
+    /// from the iPhone, and is a linked iPhone still not accepting input? `Watchdog`
+    /// decides what each look leads to. When nothing needs watching (MacHop switched off
+    /// with everything in order, say), nothing runs.
+    private var needsWatch: Bool {
+        tap.isRunning || !accessibilityGranted || owner == .phone || availability.watchesLink
+    }
+
+    private func keepWatch() {
+        guard !watchScheduled, !stopping, needsWatch else { return }
+        watchScheduled = true
+        scheduler.after(Watchdog.interval) { [weak self] in
+            guard let self else { return }
+            self.watchScheduled = false
+            self.look()
+            self.keepWatch()
         }
     }
 
-    /// While the phone has input, Secure Input or a dead tap must hand input back quickly.
-    /// One check chain per ownership period: a newer period supersedes older chains.
-    private func watchWhilePhoneOwnsInput(period: Int? = nil) {
-        if period == nil { ownershipPeriod += 1 }
-        let current = period ?? ownershipPeriod
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self, self.owner == .phone, self.ownershipPeriod == current else { return }
-                if SystemMonitor.secureInputActive {
-                    self.session.returnToMac(.unavailable(.secureInput))
-                } else if !self.tap.isHealthy {
-                    self.captureInterrupted(.captureStopped)
-                } else {
-                    self.watchWhilePhoneOwnsInput(period: current)
-                }
-            }
-        }
-    }
-
-    /// Polls only while permission is missing; one chain at a time.
-    private func pollForAccessibility() {
-        guard !pollingAccessibility else { return }
-        pollingAccessibility = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.pollingAccessibility = false
-                if EventTap.accessibilityGranted { self.refresh() } else { self.pollForAccessibility() }
-            }
-        }
-    }
-
-    /// While capture runs, checks once a second that Accessibility is still allowed.
-    /// Turning it off while an event tap is running can stop all keyboard and mouse
-    /// input until the Mac restarts (reported on macOS 15 to 27, Sept 2026), and the
-    /// change notification can arrive before the permission reads as gone, so MacHop
-    /// looks for itself and lets go of the tap at once.
-    private func watchAccessibility() {
-        guard !watchingAccessibility else { return }
-        watchingAccessibility = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.watchingAccessibility = false
-                guard self.tap.isRunning else { return }
-                if EventTap.accessibilityGranted {
-                    self.watchAccessibility()
-                } else {
-                    Log.app.notice("Accessibility permission was turned off; stopping input capture")
-                    self.session.returnToMac(.unavailable(.accessibilityRevoked))
-                    self.refresh()
-                }
+    private func look() {
+        guard !stopping, needsWatch else { return }
+        let onPhone = owner == .phone
+        let facts = Watchdog.Facts(capturing: tap.isRunning, accessibilityWasGranted: accessibilityGranted,
+                                   accessibilityGranted: EventTap.accessibilityGranted, phoneHasInput: onPhone,
+                                   secureInput: onPhone && SystemMonitor.secureInputActive,
+                                   captureHealthy: !onPhone || tap.isHealthy, watchesLink: availability.watchesLink,
+                                   phoneChosen: settings.phoneID != nil && !dryRun)
+        for action in watchdog.look(facts) {
+            switch action {
+            case .accessibilityRevoked:
+                Log.app.notice("Accessibility permission was turned off; stopping input capture")
+                session.returnToMac(.unavailable(.accessibilityRevoked))
+                refresh()
+            case .accessibilityGranted:
+                refresh()
+            case .secureInputTookOver:
+                session.returnToMac(.unavailable(.secureInput))
+            case .captureStopped:
+                captureInterrupted(.captureStopped)
+            case .reconnect:
+                connector.reconnect()
+            case .tellUserLinkIsStuck:
+                show(notice: "\(phoneName) is in range but has not accepted MacHop as a keyboard. " +
+                     "Check that Bluetooth and AssistiveTouch are on, then try Reconnect.")
             }
         }
     }
@@ -428,11 +389,9 @@ final class AppModel {
         notice = message
         noticeToken += 1
         let token = noticeToken
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self, self.noticeToken == token else { return }
-                self.notice = nil
-            }
+        scheduler.after(8) { [weak self] in
+            guard let self, self.noticeToken == token else { return }
+            self.notice = nil
         }
     }
 
@@ -518,7 +477,7 @@ final class AppModel {
     func stopSearching() { connector.stopSearch() }
 
     func reconnect() {
-        linkAttempts = 0
+        watchdog.linkRecovered()
         connector.reconnect()
     }
 
@@ -529,7 +488,7 @@ final class AppModel {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
-        pollForAccessibility()
+        keepWatch()
     }
 
     func openBluetoothSettings() {

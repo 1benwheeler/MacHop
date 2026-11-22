@@ -51,6 +51,7 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
     private weak var reportMap: CBMutableCharacteristic?
     private var controlPoint: CBMutableCharacteristic?
     private var retryDelay = 1.0
+    private let scheduler = MainScheduler()
 
     init(transport: HIDTransport) {
         self.transport = transport
@@ -257,11 +258,9 @@ final class HIDPeripheral: NSObject, CBPeripheralManagerDelegate, NotificationSi
             pendingServices.removeAll()
             let delay = retryDelay
             retryDelay = min(retryDelay * 2, 30)
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self, self.manager?.state == .poweredOn else { return }
-                    self.publish()
-                }
+            scheduler.after(delay) { [weak self] in
+                guard let self, self.manager?.state == .poweredOn else { return }
+                self.publish()
             }
             return
         }
