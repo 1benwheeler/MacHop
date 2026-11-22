@@ -35,14 +35,37 @@ nonisolated struct AppSettings: Codable, Equatable {
         AppSettings(session: SessionSettings(layout: PhoneLayout(displayID: mainDisplay)))
     }
 
-    /// Loads saved settings, or the defaults on first launch.
+    /// Where saved settings that couldn't be read are kept, so they aren't lost when
+    /// the defaults are saved in their place.
+    static let unreadableKey = "settings.v1.unreadable"
+
+    /// Loads saved settings, or the defaults on first launch. Settings that can't be read
+    /// (damaged, or saved by a newer MacHop with an option this one doesn't know) also
+    /// give the defaults, but a copy is kept and the failure is logged.
     static func load(defaults: UserDefaults = .standard, mainDisplay: UInt32, displays: [Display] = []) -> AppSettings {
-        if let data = defaults.data(forKey: key), let saved = try? JSONDecoder().decode(AppSettings.self, from: data) {
-            var settings = saved
+        guard let data = defaults.data(forKey: key) else { return defaultSettings(mainDisplay: mainDisplay) }
+        do {
+            var settings = try JSONDecoder().decode(AppSettings.self, from: data)
             settings.session = settings.session.sanitized()
             return settings
+        } catch {
+            defaults.set(data, forKey: unreadableKey)
+            // The name of the setting only, never its value.
+            Log.app.error("Saved settings could not be read (\(unreadableField(error), privacy: .public)); using the defaults. A copy is kept.")
+            return defaultSettings(mainDisplay: mainDisplay)
         }
-        return defaultSettings(mainDisplay: mainDisplay)
+    }
+
+    /// Which setting stopped the saved settings loading, e.g. "session.scroll.style".
+    static func unreadableField(_ error: Error) -> String {
+        let path: [CodingKey]
+        switch error as? DecodingError {
+        case .keyNotFound(let key, let context)?: path = context.codingPath + [key]
+        case .typeMismatch(_, let context)?, .valueNotFound(_, let context)?, .dataCorrupted(let context)?:
+            path = context.codingPath
+        default: return "unknown"
+        }
+        return path.isEmpty ? "not valid settings" : path.map(\.stringValue).joined(separator: ".")
     }
 
     func save(defaults: UserDefaults = .standard) {

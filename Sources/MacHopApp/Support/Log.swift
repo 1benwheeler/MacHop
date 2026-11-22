@@ -4,7 +4,7 @@ import os
 /// Structural diagnostics only: connection and ownership changes, never typed
 /// keys, report contents or device names. View with:
 ///   /usr/bin/log stream --predicate 'subsystem == "local.machop"'  (zsh has its own `log`)
-enum Log {
+nonisolated enum Log {
     static let bluetooth = Logger(subsystem: "local.machop", category: "bluetooth")
     static let input = Logger(subsystem: "local.machop", category: "input")
     static let app = Logger(subsystem: "local.machop", category: "app")

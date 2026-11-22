@@ -234,6 +234,32 @@ struct SettingsTests {
         settings.profile = .standard
         settings.save(defaults: defaults)
         #expect(AppSettings.load(defaults: defaults, mainDisplay: 1) == settings)
+        #expect(defaults.data(forKey: AppSettings.unreadableKey) == nil, "nothing set aside when settings load")
+    }
+
+    @Test("Settings that can't be read give the defaults, and a copy is kept rather than lost", arguments: [
+        "not settings at all",
+        // Saved by a newer MacHop: a keyboard and pointer layout this one doesn't know.
+        #"{"profile":"future","paused":false,"session":{"layout":{"aspectRatio":0.46,"verticalPosition":0.5,"size":620,"displayID":1,"orientation":"portrait","side":"right"}}}"#
+    ])
+    func unreadableSettingsAreKept(saved: String) throws {
+        let defaults = try #require(UserDefaults(suiteName: "machop.tests.\(UUID().uuidString)"))
+        let data = Data(saved.utf8)
+        defaults.set(data, forKey: AppSettings.key)
+        #expect(AppSettings.load(defaults: defaults, mainDisplay: 7) == AppSettings.defaultSettings(mainDisplay: 7))
+        #expect(defaults.data(forKey: AppSettings.unreadableKey) == data)
+        // What the app does next: saves the defaults. The copy survives that.
+        AppSettings.defaultSettings(mainDisplay: 7).save(defaults: defaults)
+        #expect(defaults.data(forKey: AppSettings.unreadableKey) == data)
+    }
+
+    @Test("The log names the setting that couldn't be read, never its value")
+    func unreadableFieldIsNamed() {
+        let saved = Data(#"{"profile":"future","paused":false,"session":{"layout":{"aspectRatio":0.46,"verticalPosition":0.5,"size":620,"displayID":1,"orientation":"portrait","side":"right"}}}"#.utf8)
+        let error = #expect(throws: DecodingError.self) { try JSONDecoder().decode(AppSettings.self, from: saved) }
+        let field = error.map(AppSettings.unreadableField) ?? ""
+        #expect(field == "profile")
+        #expect(!field.contains("future"))
     }
 }
 
