@@ -27,6 +27,8 @@ Pass any `swift test` arguments through, for example `scripts/test.sh --filter S
 
 New behaviour should come with a test. Bug fixes ideally include one that fails without the fix.
 
+The same tests run on GitHub for every pull request, on Apple silicon and Intel Macs (`.github/workflows/tests.yml`).
+
 ## Testing on a real iPhone
 
 Some things only a real iPhone can answer. `machop-lab` drives the iPhone through MacHop and watches its screen over USB to check what actually happened.

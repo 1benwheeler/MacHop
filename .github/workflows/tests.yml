@@ -1,0 +1,55 @@
+# Runs MacHop's automated tests on GitHub's Macs for every pull request and every
+# change to main. No iPhone is involved: these are the same simulated-iPhone tests
+# as scripts/test.sh on your own Mac.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS 26, Apple silicon
+            runner: macos-26
+          - name: macOS 26, Intel
+            runner: macos-26-intel
+          # macOS 15's default Xcode is too old for this package; 26.3 is also installed.
+          - name: macOS 15, Apple silicon
+            runner: macos-15
+            xcode: /Applications/Xcode_26.3.app
+    steps:
+      # Plain git rather than an action, in keeping with MacHop using nothing third-party.
+      - name: Check out
+        run: |
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}"
+          git fetch -q --depth 1 origin "${GITHUB_REF}"
+          git checkout -q FETCH_HEAD
+      - name: Choose Xcode
+        if: matrix.xcode
+        run: sudo xcode-select -s "${{ matrix.xcode }}"
+      - name: Toolchain
+        run: swift --version
+      - name: Tests
+        run: scripts/test.sh
+      # The universal app, ad-hoc signed: checks both architectures still build and
+      # the bundle passes codesign's strict check.
+      - name: Build the app
+        if: matrix.runner == 'macos-26'
+        run: MACHOP_SIGN_IDENTITY=- scripts/build.sh
