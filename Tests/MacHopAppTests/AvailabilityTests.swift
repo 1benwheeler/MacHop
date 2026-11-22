@@ -1,3 +1,4 @@
+import CoreBluetooth
 import Testing
 @testable import MacHopApp
 @testable import MacHopCore
@@ -157,6 +158,18 @@ struct AvailabilityTests {
     @Test("The watchdog restarts the link three times, tells the user once, then waits")
     func linkWatchActions() {
         #expect((1...6).map(Availability.linkWatchAction(attempt:)) == [.reconnect, .reconnect, .reconnect, .tellUser, .wait, .wait])
+    }
+
+    @Test("A link that fails because the iPhone forgot the pairing is recognised; other failures are just retried")
+    func pairingRemoved() {
+        #expect(PhoneConnector.linkProblem(from: CBError(.peerRemovedPairingInformation)) == .pairingRemoved)
+        #expect(PhoneConnector.linkProblem(from: NSError(domain: CBErrorDomain, code: 14)) == .pairingRemoved)
+        #expect(PhoneConnector.linkProblem(from: CBError(.connectionTimeout)) == nil)
+        #expect(PhoneConnector.linkProblem(from: CBError(.peripheralDisconnected)) == nil)
+        #expect(PhoneConnector.linkProblem(from: NSError(domain: "another", code: 14)) == nil)
+        #expect(PhoneConnector.linkProblem(from: nil) == nil)
+        let notice = PhoneConnector.LinkProblem.pairingRemoved.text(phone: "iPhone1")
+        #expect(notice.contains("iPhone1 has forgotten its pairing") && notice.contains("System Settings → Bluetooth"))
     }
 
     @Test("Reconnecting: at once after a plain drop, then doubling up to half a minute")

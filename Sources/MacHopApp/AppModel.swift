@@ -54,6 +54,8 @@ final class AppModel {
     @ObservationIgnored private var watchdog = Watchdog()
     @ObservationIgnored private var watchScheduled = false
     @ObservationIgnored private var noticeToken = 0
+    /// The current link problem has been shown; not again until the iPhone works or the user tries again.
+    @ObservationIgnored private var toldLinkProblem = false
     @ObservationIgnored private var ownershipPeriod = 0
     @ObservationIgnored private var traceUntil = 0.0
     @ObservationIgnored private var stopping = false
@@ -217,7 +219,10 @@ final class AppModel {
         let availability = self.availability
         session.mayWakePhone = availability.mayWakePhone
         session.setEnabled(availability.disabledReason == nil, reason: availability.disabledReason)
-        if transport.isReady { watchdog.linkRecovered() }
+        if transport.isReady {
+            watchdog.linkRecovered()
+            toldLinkProblem = false
+        }
         keepWatch()
     }
 
@@ -283,6 +288,12 @@ final class AppModel {
         nearby = connector.nearby
         isSearching = connector.isSearching
         if link == .notFound { show(notice: "Your Mac no longer recognises \(phoneName). Choose it again in Settings.") }
+        // Said once: the link keeps retrying, and each failure reports the same thing.
+        if let problem = connector.linkProblem, !toldLinkProblem {
+            toldLinkProblem = true
+            Log.bluetooth.notice("The iPhone has removed its pairing with this Mac")
+            show(notice: problem.text(phone: phoneName))
+        }
         // The iPhone says which model it is: size it to match, unless a size was chosen by hand.
         if let model = connector.modelIdentifier, model != settings.phoneModel {
             update { saved in
@@ -410,6 +421,7 @@ final class AppModel {
         if next.profile != previous.profile { rebuildStack() }
         if next.session != previous.session { session.configure(settings: next.session, displays: displays) }
         if next.phoneID != previous.phoneID {
+            toldLinkProblem = false
             peripheral.allowedCentral = next.phoneID
             connector.phoneID = next.phoneID
         }
@@ -480,6 +492,7 @@ final class AppModel {
 
     func reconnect() {
         watchdog.linkRecovered()
+        toldLinkProblem = false
         connector.reconnect()
     }
 

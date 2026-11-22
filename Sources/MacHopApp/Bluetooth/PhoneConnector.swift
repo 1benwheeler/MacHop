@@ -30,6 +30,24 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     private(set) var linkState: LinkState = .off {
         didSet { if linkState != oldValue { onChange?() } }
     }
+    /// Something stopping the link that only the user can put right.
+    enum LinkProblem: Equatable {
+        /// The iPhone no longer has its half of the pairing (for example, MacHop was
+        /// forgotten in the iPhone's Bluetooth settings), so every attempt will fail.
+        case pairingRemoved
+    }
+
+    private(set) var linkProblem: LinkProblem? {
+        didSet { if linkProblem != oldValue { onChange?() } }
+    }
+
+    /// What a failed or dropped link's error says the user must fix, if anything.
+    static func linkProblem(from error: Error?) -> LinkProblem? {
+        guard let error = error as NSError?, error.domain == CBErrorDomain,
+              error.code == CBError.Code.peerRemovedPairingInformation.rawValue else { return nil }
+        return .pairingRemoved
+    }
+
     private(set) var nearby: [NearbyDevice] = []
     /// The linked iPhone's name, as it reports it (e.g. "Ben's iPhone").
     var linkedName: String? { linkState == .connected ? peripheral?.name : nil }
@@ -133,6 +151,7 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         peripheral = nil
         failures = 0
         connectedAt = nil
+        linkProblem = nil
     }
 
     private func update() {
@@ -199,6 +218,7 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         guard peripheral === self.peripheral else { return }
         connectedAt = ProcessInfo.processInfo.systemUptime
+        linkProblem = nil
         linkState = .connected
         Log.bluetooth.notice("Linked to the iPhone; waiting for it to subscribe")
         // Ask which iPhone this is (Device Information → Model Number), to size it on screen.
@@ -238,6 +258,7 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         let lasted = connectedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? 0
         failures = Self.countsAsFailure(linkLasted: lasted) ? failures + 1 : 0
         connectedAt = nil
+        if let problem = Self.linkProblem(from: error) { linkProblem = problem }
         Log.bluetooth.notice("iPhone link closed\(error.map { ": \($0.localizedDescription)" } ?? "", privacy: .public)")
         linkState = .connecting
         retry()
@@ -246,6 +267,7 @@ final class PhoneConnector: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         guard peripheral === self.peripheral else { return }
         failures += 1
+        if let problem = Self.linkProblem(from: error) { linkProblem = problem }
         Log.bluetooth.notice("Could not link to the iPhone (attempt \(self.failures)): \(error?.localizedDescription ?? "unknown", privacy: .public)")
         linkState = .connecting
         retry()

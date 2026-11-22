@@ -60,6 +60,17 @@ enum PrivacyPane {
     }
 }
 
+extension PhoneConnector.LinkProblem {
+    /// The notice shown when the link can't come up until the user does something.
+    func text(phone: String) -> String {
+        switch self {
+        case .pairingRemoved:
+            "\(phone) has forgotten its pairing with this Mac. In System Settings → Bluetooth on your Mac, " +
+                "forget \(phone), then choose it again in MacHop."
+        }
+    }
+}
+
 extension EntryRefusal {
     /// The notice shown when a push into the edge is refused.
     var text: String {
