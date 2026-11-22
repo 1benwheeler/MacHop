@@ -212,6 +212,7 @@ private struct PhonePage: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 4)
+                    .help("With the drawing selected (press Tab), the arrow keys move your iPhone too.")
                 Rectangle().fill(Theme.border).frame(height: 1).padding(.top, 10)
                 HStack(spacing: 10) {
                     StatusPill(text: StatusText.title(model), colour: model.statusColour)

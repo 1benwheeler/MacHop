@@ -232,6 +232,64 @@ struct GeometryTests {
         #expect(ScreenLink(layout: PhoneLayout(displayID: 1, side: .bottom), displays: [main, below]) == nil)
     }
 
+    // MARK: Arranging from the keyboard
+
+    @Test("Arrow keys move the iPhone along its edge in small steps, stopping exactly at the ends")
+    func keyboardNudges() throws {
+        let start = PhoneLayout(displayID: 1, side: .right, edgePosition: 0.5)
+        let down = try #require(ScreenLink.steppedLayout(from: start, .down, displays: [main]))
+        #expect(down.side == .right && abs(down.edgePosition - 0.55) < 1e-9)
+        let up = try #require(ScreenLink.steppedLayout(from: start, .up, displays: [main]))
+        #expect(abs(up.edgePosition - 0.45) < 1e-9)
+        var layout = start
+        for _ in 0..<10 { layout = try #require(ScreenLink.steppedLayout(from: layout, .down, displays: [main])) }
+        #expect(layout.side == .right && layout.edgePosition == 1, "ten steps of a twentieth reach the end exactly")
+        // Size, orientation and the rest are kept.
+        var big = start
+        big.size = 900
+        big.orientation = .landscape
+        let moved = try #require(ScreenLink.steppedLayout(from: big, .up, displays: [main]))
+        #expect(moved.size == 900 && moved.orientation == .landscape && moved.displayID == 1)
+    }
+
+    @Test("At the end of an edge the next press turns the corner; pressing towards the screen crosses it; away does nothing")
+    func keyboardCornersAndCrossing() throws {
+        let topOfRight = PhoneLayout(displayID: 1, side: .right, edgePosition: 0)
+        let turned = try #require(ScreenLink.steppedLayout(from: topOfRight, .up, displays: [main]))
+        #expect(turned.side == .top && turned.edgePosition == 1, "onto the right-hand end of the top edge")
+        let back = try #require(ScreenLink.steppedLayout(from: turned, .right, displays: [main]))
+        #expect(back.side == .right && back.edgePosition == 0, "and the same way back")
+        let across = try #require(ScreenLink.steppedLayout(from: PhoneLayout(displayID: 1, side: .right, edgePosition: 0.3), .left,
+                                                           displays: [main]))
+        #expect(across.side == .left && across.edgePosition == 0.3)
+        for (side, away) in [(Side.left, ArrangeStep.left), (.right, .right), (.top, .up), (.bottom, .down)] {
+            #expect(ScreenLink.steppedLayout(from: PhoneLayout(displayID: 1, side: side), away, displays: [main]) == nil)
+        }
+    }
+
+    @Test("Holding an arrow key walks the iPhone all the way round the display and back to where it began")
+    func keyboardWalksRound() throws {
+        var layout = PhoneLayout(displayID: 1, side: .right, edgePosition: 0.5)
+        var visited: [Side] = [layout.side]
+        // Down the right side, left along the bottom, up the left side, right along the top.
+        for step in [ArrangeStep.down, .left, .up, .right] {
+            // Keep pressing until the iPhone turns a corner (an edge is 20 steps long).
+            for _ in 0..<25 where layout.side == visited.last {
+                layout = try #require(ScreenLink.steppedLayout(from: layout, step, displays: [main]))
+            }
+            visited.append(layout.side)
+        }
+        #expect(visited == [.right, .bottom, .left, .top, .right])
+    }
+
+    @Test("The keyboard never puts the iPhone on an edge another display covers")
+    func keyboardSkipsCoveredEdges() {
+        let above = Display(id: 2, frame: Rect(x: -200, y: -1080, width: 1920, height: 1080))
+        let topOfRight = PhoneLayout(displayID: 1, side: .right, edgePosition: 0)
+        #expect(ScreenLink.steppedLayout(from: topOfRight, .up, displays: [main, above]) == nil)
+        #expect(ScreenLink.steppedLayout(from: PhoneLayout(displayID: 1, side: .bottom), .up, displays: [main, above]) == nil)
+    }
+
     // MARK: Orientation
 
     @Test("The Dynamic Island's end of the phone, as drawn, is the top of the iPhone's own screen")

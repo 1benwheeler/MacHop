@@ -28,6 +28,22 @@ struct DeviceStage: View {
             }
             .contentShape(Rectangle())
             .gesture(drag(map: map), including: onArrange == nil ? .none : .all)
+            // For people who can't drag: with keyboard navigation on, Tab reaches the
+            // drawing and the arrow keys walk the iPhone round the display.
+            .focusable(onArrange != nil, interactions: .activate)
+            .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+                let step: ArrangeStep = switch press.key {
+                case .leftArrow: .left
+                case .rightArrow: .right
+                case .upArrow: .up
+                default: .down
+                }
+                guard let onArrange, let next = ScreenLink.steppedLayout(from: layout, step, displays: displays) else {
+                    return .ignored
+                }
+                Motion.animate { onArrange(next) }
+                return .handled
+            }
             .onContinuousHover { phase in
                 guard onArrange != nil, dragCentre == nil else { return }
                 if case .active(let point) = phase, let phone = phoneRect(map: map), phone.insetBy(dx: -6, dy: -6).contains(point) {

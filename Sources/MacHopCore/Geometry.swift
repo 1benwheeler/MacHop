@@ -76,6 +76,11 @@ public struct Display: Equatable, Hashable, Sendable, Identifiable {
     }
 }
 
+/// One arrow-key press while arranging the iPhone from the keyboard.
+public enum ArrangeStep: Sendable, CaseIterable {
+    case left, right, up, down
+}
+
 /// The display edge the iPhone sits against.
 public enum Side: String, Codable, Sendable, CaseIterable {
     case left, right, top, bottom
@@ -278,6 +283,54 @@ public struct ScreenLink: Equatable, Sendable {
             }
         }
         return best?.layout
+    }
+
+    /// How far one arrow-key press moves the phone along its edge, as a share of the edge.
+    public static let keyboardStep = 0.05
+
+    /// The arrangement one arrow-key press away. The phone walks round the display as it
+    /// does when dragged: along its edge; round the corner onto the next edge once it's at
+    /// the end; or straight across to the opposite edge. Nil when the press leads nowhere:
+    /// away from the display, or onto an edge another display covers.
+    public static func steppedLayout(from layout: PhoneLayout, _ step: ArrangeStep, displays: [Display]) -> PhoneLayout? {
+        var next = layout
+        let alongEdge = layout.side.isHorizontal ? (step == .left || step == .right) : (step == .up || step == .down)
+        if alongEdge {
+            // Positions run from 0 at the top (or left) end of an edge to 1 at the other.
+            let forward = step == .right || step == .down
+            let atEnd = forward ? layout.edgePosition >= 1 - 1e-9 : layout.edgePosition <= 1e-9
+            if !atEnd {
+                let moved = layout.edgePosition + (forward ? keyboardStep : -keyboardStep)
+                next.edgePosition = moved > 1 - 1e-9 ? 1 : moved < 1e-9 ? 0 : moved
+            } else {
+                // Round the corner, onto the end of the next edge that touches this one.
+                switch (layout.side, forward) {
+                case (.left, false): (next.side, next.edgePosition) = (.top, 0)
+                case (.left, true): (next.side, next.edgePosition) = (.bottom, 0)
+                case (.right, false): (next.side, next.edgePosition) = (.top, 1)
+                case (.right, true): (next.side, next.edgePosition) = (.bottom, 1)
+                case (.top, false): (next.side, next.edgePosition) = (.left, 0)
+                case (.top, true): (next.side, next.edgePosition) = (.right, 0)
+                case (.bottom, false): (next.side, next.edgePosition) = (.left, 1)
+                case (.bottom, true): (next.side, next.edgePosition) = (.right, 1)
+                }
+            }
+        } else {
+            let outward: ArrangeStep = switch layout.side {
+            case .left: .left
+            case .right: .right
+            case .top: .up
+            case .bottom: .down
+            }
+            guard step != outward else { return nil }
+            next.side = switch layout.side {
+            case .left: .right
+            case .right: .left
+            case .top: .bottom
+            case .bottom: .top
+            }
+        }
+        return ScreenLink(layout: next, displays: displays) == nil ? nil : next
     }
 
     /// True where pushing against the edge at `position` along it crosses onto the phone.
