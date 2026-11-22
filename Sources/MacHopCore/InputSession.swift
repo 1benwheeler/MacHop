@@ -140,13 +140,11 @@ public final class InputSession {
     public var onWakePhone: (() -> Void)?
     /// ⌃⌥⌘I was pressed but input can't go to the phone (and it can't be woken).
     public var onJumpUnavailable: (() -> Void)?
-    /// Runs work later on the main actor; used to release a drag-scroll whose
-    /// end never arrived. Without it, strokes end only on the next event.
-    public var schedule: ((Double, @escaping @MainActor () -> Void) -> Void)?
-
     private let link: HIDLink
     private let cursor: CursorControl
-    private let clock: () -> Double
+    /// Time, and work done a moment later: letting go of a click the session made, and
+    /// releasing a drag-scroll whose end never arrived.
+    private let scheduler: Scheduler
 
     private enum Holder { case mac, phone, swallowed }
     private var keyHolders: [UInt16: Holder] = [:]
@@ -192,11 +190,11 @@ public final class InputSession {
     public static let jumpWakeWindow = 3.0
 
     public init(settings: SessionSettings, displays: [Display], link: HIDLink, cursor: CursorControl,
-                clock: @escaping () -> Double) {
+                scheduler: Scheduler) {
         self.settings = settings.sanitized()
         self.link = link
         self.cursor = cursor
-        self.clock = clock
+        self.scheduler = scheduler
         self.screenLink = ScreenLink(layout: self.settings.layout, displays: displays)
     }
 
@@ -217,7 +215,7 @@ public final class InputSession {
         if !enabled { returnToMac(.unavailable(reason)) }
         if let until = jumpWhenReadyUntil, enabled, link.isReady {
             jumpWhenReadyUntil = nil
-            if clock() <= until { jumpToPhone() }
+            if scheduler.now <= until { jumpToPhone() }
         }
     }
 
@@ -310,7 +308,7 @@ public final class InputSession {
         phonePointer = nil
         crossingPressure = 0
         returnPressure = 0
-        crossingAllowedAfter = clock() + (deliberateExit ? Self.exitCooldown : Self.crossingCooldown)
+        crossingAllowedAfter = scheduler.now + (deliberateExit ? Self.exitCooldown : Self.crossingCooldown)
         if let destination, let from = lastLocation { expectJump(from: from, to: destination) }
         lastMacLocation = destination
         lastLocation = destination ?? lastLocation
@@ -353,7 +351,7 @@ public final class InputSession {
     private func entryRefused() -> Bool {
         guard let refusal = entryGuard?() else { return false }
         crossingPressure = 0
-        crossingAllowedAfter = clock() + Self.crossingCooldown
+        crossingAllowedAfter = scheduler.now + Self.crossingCooldown
         onEntryRefused?(refusal)
         return true
     }
@@ -377,7 +375,7 @@ public final class InputSession {
         if isEnabled && link.isReady {
             jumpToPhone()
         } else if mayWakePhone {
-            jumpWhenReadyUntil = clock() + Self.jumpWakeWindow
+            jumpWhenReadyUntil = scheduler.now + Self.jumpWakeWindow
             wakePhone()
         } else {
             onJumpUnavailable?()
@@ -385,8 +383,8 @@ public final class InputSession {
     }
 
     private func wakePhone() {
-        guard clock() >= wakeAllowedAfter else { return }
-        wakeAllowedAfter = clock() + Self.wakeInterval
+        guard scheduler.now >= wakeAllowedAfter else { return }
+        wakeAllowedAfter = scheduler.now + Self.wakeInterval
         onWakePhone?()
     }
 
@@ -464,7 +462,7 @@ public final class InputSession {
         let previous = lastMacLocation ?? Point(x: location.x - delta.x, y: location.y - delta.y)
         lastMacLocation = location
         let available = isEnabled && link.isReady
-        guard available || mayWakePhone, let screenLink, clock() >= crossingAllowedAfter,
+        guard available || mayWakePhone, let screenLink, scheduler.now >= crossingAllowedAfter,
               !buttonHolders.values.contains(.mac) else {
             crossingPressure = 0
             return nil
@@ -609,7 +607,7 @@ public final class InputSession {
                     guard let self else { return }
                     self.link.send(.pointer(self.pointerReport(at: press.start, buttons: self.phoneButtons)))
                 }
-                if let schedule { schedule(0.05) { release() } } else { release() }
+                scheduler.after(0.05) { release() }
             }
             return .suppress
         }
@@ -828,10 +826,10 @@ public final class InputSession {
         let scale = settings.scroll.speed * (settings.scroll.reversed ? -1 : 1)
         // Natural scrolling: the content (and so the touch) follows the fingers.
         let delta = Point(x: settings.scroll.horizontal ? input.dx * scale : 0, y: input.dy * scale)
-        perform(scroller?.scroll(by: delta, at: clock()) ?? [])
+        perform(scroller?.scroll(by: delta, at: scheduler.now) ?? [])
         strokeGeneration += 1
         let generation = strokeGeneration
-        schedule?(Self.strokeTimeout) { [weak self] in
+        scheduler.after(Self.strokeTimeout) { [weak self] in
             guard let self, self.strokeGeneration == generation else { return }
             self.finishStroke()
         }
@@ -880,19 +878,19 @@ public final class InputSession {
     private func trackPhoneSwipe(_ swipe: DockSwipe) {
         switch swipe.phase {
         case .began, .mayBegin:
-            phoneSwipe = (swipe.axis, swipe.progress, clock())
+            phoneSwipe = (swipe.axis, swipe.progress, scheduler.now)
         case .changed:
             guard var current = phoneSwipe else { return }
             if abs(swipe.progress) > abs(current.peak) + 0.005 {
                 current.peak = swipe.progress
-                current.lastGrowth = clock()
+                current.lastGrowth = scheduler.now
             }
             phoneSwipe = current
         case .ended:
             defer { phoneSwipe = nil }
             guard settings.phoneGestures, let current = phoneSwipe, current.axis == .vertical,
                   abs(current.peak) >= Self.swipeThreshold else { return }
-            let held = clock() - current.lastGrowth >= Self.holdDuration
+            let held = scheduler.now - current.lastGrowth >= Self.holdDuration
             let action: PhoneAction = current.peak > 0 ? .notificationCentre : held ? .appSwitcher : .home
             if action == .home { pressHomeKey() } else { pressPhoneButton(action.rawValue) }
             onPhoneAction?(action)
@@ -906,7 +904,7 @@ public final class InputSession {
     private func pressHomeKey() {
         link.send(.consumer(ConsumerReport(usage: ConsumerReport.menu)))
         let release = { [weak self] in self?.link.send(.consumer(.released)) }
-        if let schedule { schedule(0.06) { release() } } else { release() }
+        scheduler.after(0.06) { release() }
     }
 
     /// Clicks pointer button `number` (1-based) on the phone, where the pointer is.
@@ -920,7 +918,7 @@ public final class InputSession {
             let now = self.phonePointer.map { self.pointerReport(at: $0) } ?? base
             self.link.send(.pointer(PointerReport(buttons: now.buttons & ~bit, x: now.x, y: now.y)))
         }
-        if let schedule { schedule(0.06) { release() } } else { release() }
+        scheduler.after(0.06) { release() }
     }
 
     private func gesture(_ kind: GestureKind, phase: GesturePhase) -> Disposition {

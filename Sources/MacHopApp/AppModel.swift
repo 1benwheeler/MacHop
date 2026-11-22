@@ -69,9 +69,8 @@ final class AppModel {
         let transport = HIDTransport(profile: HIDProfile(settings.profile), scheduler: scheduler)
         self.transport = transport
         peripheral = HIDPeripheral(transport: transport)
-        let scheduler = self.scheduler
         session = InputSession(settings: settings.session, displays: SystemMonitor.displays(), link: transport,
-                               cursor: cursor, clock: { scheduler.now })
+                               cursor: cursor, scheduler: scheduler)
         wireStack()
     }
 
@@ -136,8 +135,6 @@ final class AppModel {
         }
         transport.onStall = { [weak self] in self?.transportStalled() }
         session.onOwnerChange = { [weak self] owner, reason in self?.ownerChanged(owner, reason: reason) }
-        let scheduler = self.scheduler
-        session.schedule = { delay, action in scheduler.after(delay, action) }
         session.onPhoneAction = { [weak self] action in
             let sent = action == .home ? "Menu key" : "button \(action.rawValue)"
             Log.input.notice("iPhone gesture: \(String(describing: action), privacy: .public) (\(sent, privacy: .public))")
@@ -572,9 +569,8 @@ final class AppModel {
         connector.servicesReady = false
         transport = HIDTransport(profile: HIDProfile(settings.profile), scheduler: scheduler)
         peripheral = HIDPeripheral(transport: transport)
-        let scheduler = self.scheduler
         session = InputSession(settings: settings.session, displays: displays, link: transport,
-                               cursor: cursor, clock: { scheduler.now })
+                               cursor: cursor, scheduler: scheduler)
         wireStack()
         peripheral.start()
         Log.bluetooth.notice("HID profile changed to \(self.settings.profile.rawValue, privacy: .public)")

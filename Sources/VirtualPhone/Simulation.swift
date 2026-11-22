@@ -215,11 +215,9 @@ public final class Simulation {
         let main = displays[0].frame
         cursor = VirtualCursor(location: Point(x: main.x + main.width / 2, y: main.y + main.height / 2),
                                displays: displays)
-        let scheduler = self.scheduler
         session = InputSession(settings: settings ?? SessionSettings(layout: PhoneLayout(displayID: displays[0].id)),
-                               displays: displays, link: transport, cursor: cursor, clock: { scheduler.now })
+                               displays: displays, link: transport, cursor: cursor, scheduler: scheduler)
         session.onOwnerChange = { [weak self] owner, reason in self?.ownerChanges.append((owner, reason)) }
-        session.schedule = { delay, action in scheduler.after(delay, action) }
         transport.onReadyChange = { [weak self] ready in
             self?.session.setEnabled(ready, reason: ready ? "" : "iPhone disconnected")
         }
