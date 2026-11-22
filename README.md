@@ -63,7 +63,7 @@ MacHop opens a setup guide the first time you run it, and ticks off each step as
 </p>
 
 1. Allow **Bluetooth**.
-2. Allow **Accessibility**, so MacHop can send your keyboard and trackpad to the iPhone. It never records what you type.
+2. Allow **Accessibility** (macOS 27 calls it **Device Control and Data Access**), so MacHop can send your keyboard and trackpad to the iPhone. It never records what you type.
 3. Choose your iPhone.
 4. Turn on **AssistiveTouch** on the iPhone.
 5. Move onto your iPhone once.

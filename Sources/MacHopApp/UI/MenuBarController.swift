@@ -64,7 +64,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             self?.closeMenu { self?.model.settings.phoneID == nil ? self?.actions.guide() : self?.actions.open() }
         }))
         if let notice = model.notice {
-            menu.addItem(hosted(Text(notice).font(.system(size: 11.5)).foregroundStyle(.orange)
+            menu.addItem(hosted(Text(notice).font(.system(size: 11.5)).foregroundStyle(Theme.notice)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14).padding(.bottom, 4)))
         }

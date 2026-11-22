@@ -34,6 +34,8 @@ final class AppModel {
     private(set) var displays: [Display] = SystemMonitor.displays()
     private(set) var notice: String?
     private(set) var launchAtLogin = SMAppService.mainApp.status == .enabled
+    /// Open at login was asked for, but MacHop's login item is switched off in System Settings.
+    private(set) var loginItemNeedsApproval = false
     private(set) var subscriptions = 0
     private(set) var stats = HIDTransport.Stats()
     /// The latest gesture sent to the phone, for the setup guide.
@@ -503,8 +505,18 @@ final class AppModel {
         } catch {
             show(notice: "Could not change the login item: \(error.localizedDescription)")
         }
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        let status = SMAppService.mainApp.status
+        launchAtLogin = status == .enabled
+        loginItemNeedsApproval = Self.loginItemNeedsApproval(asked: enabled, status: status)
     }
+
+    /// macOS registers the login item but leaves it off when the user has switched it off
+    /// under Login Items; only they can switch it back on there.
+    static func loginItemNeedsApproval(asked enabled: Bool, status: SMAppService.Status) -> Bool {
+        enabled && status == .requiresApproval
+    }
+
+    func openLoginItemsSettings() { SMAppService.openSystemSettingsLoginItems() }
 
     /// Switches the HID report layout. The phone re-reads the services; no new pairing is needed.
     private func rebuildStack() {

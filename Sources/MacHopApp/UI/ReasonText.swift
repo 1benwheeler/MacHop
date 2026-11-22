@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import Foundation
 import MacHopCore
 
 // The words for why the iPhone can't take input, or why input came back to the Mac.
@@ -37,6 +38,26 @@ extension BlockReason {
     /// Whether to tell the user when input comes back to the Mac for this reason.
     /// Not when they switched MacHop off themselves.
     var isAnnounced: Bool { self != .paused }
+}
+
+/// Where in System Settings MacHop is allowed to capture input. Apple renamed the pane in
+/// macOS 27 and splits it in two in 27.3.
+enum PrivacyPane {
+    /// The pane's name, or nil where it isn't known which pane MacHop needs.
+    static func accessibilityName(macOS version: OperatingSystemVersion) -> String? {
+        if version.majorVersion < 27 { return "Accessibility" }
+        // Read from macOS 27.2.1's own settings text, 22 Nov 2026.
+        if version.majorVersion == 27 && version.minorVersion < 3 { return "Device Control and Data Access" }
+        // 27.3 (in beta, Nov 2026) has "System & App Protection Override" and
+        // "Accessibility"; Apple hasn't said which one an event tap needs.
+        return nil
+    }
+
+    /// "System Settings → Privacy & Security → …", as far as it is known.
+    static func accessibilityPath(macOS version: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion) -> String {
+        let privacy = "System Settings → Privacy & Security"
+        return accessibilityName(macOS: version).map { "\(privacy) → \($0)" } ?? privacy
+    }
 }
 
 extension EntryRefusal {

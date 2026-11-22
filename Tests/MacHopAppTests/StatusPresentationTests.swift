@@ -1,3 +1,4 @@
+import ServiceManagement
 import SwiftUI
 import Testing
 @testable import MacHopApp
@@ -70,6 +71,30 @@ struct StatusPresentationTests {
         #expect(EntryRefusal.missionControl.text == "Close Mission Control to move onto your iPhone.")
     }
 
+    @Test("The permission instruction names the pane as this macOS calls it, and no pane where that isn't known")
+    func privacyPane() {
+        func path(_ major: Int, _ minor: Int) -> String {
+            PrivacyPane.accessibilityPath(macOS: OperatingSystemVersion(majorVersion: major, minorVersion: minor, patchVersion: 0))
+        }
+        #expect(path(14, 0) == "System Settings → Privacy & Security → Accessibility")
+        #expect(path(26, 5) == "System Settings → Privacy & Security → Accessibility")
+        #expect(path(27, 0) == "System Settings → Privacy & Security → Device Control and Data Access")
+        #expect(path(27, 2) == "System Settings → Privacy & Security → Device Control and Data Access")
+        #expect(path(27, 3) == "System Settings → Privacy & Security", "27.3 splits the pane; which half isn't known yet")
+        #expect(path(28, 0) == "System Settings → Privacy & Security")
+        #expect(AppModel.Status.needsAccessibility.detail(side: .right, wakesPhone: false)
+                == "Allow MacHop in \(PrivacyPane.accessibilityPath()).")
+    }
+
+    @Test("Notice text is dark enough to read on a white card")
+    func noticeContrast() throws {
+        let colour = try #require(Theme.noticeOnLight.usingColorSpace(.sRGB))
+        func linear(_ c: CGFloat) -> Double { c <= 0.03928 ? Double(c) / 12.92 : pow((Double(c) + 0.055) / 1.055, 2.4) }
+        let luminance = 0.2126 * linear(colour.redComponent) + 0.7152 * linear(colour.greenComponent) + 0.0722 * linear(colour.blueComponent)
+        let ratio = 1.05 / (luminance + 0.05)
+        #expect(ratio >= 4.5, "contrast against white is \(ratio)")
+    }
+
     @Test("Input coming back is announced, except when the user switched MacHop off themselves")
     func announcements() {
         for reason in BlockReason.allCases { #expect(reason.isAnnounced == (reason != .paused), "\(reason)") }
@@ -89,6 +114,15 @@ struct StatusPresentationTests {
             #expect(status.mainAction.title == title, "\(status)")
             #expect(status.mainAction.isProminent == prominent, "\(status)")
         }
+    }
+
+    @Test("A blocked login item is explained only when the user has just asked for Open at login")
+    func blockedLoginItem() {
+        #expect(AppModel.loginItemNeedsApproval(asked: true, status: .requiresApproval))
+        #expect(!AppModel.loginItemNeedsApproval(asked: false, status: .requiresApproval), "turning it off needs no explaining")
+        #expect(!AppModel.loginItemNeedsApproval(asked: true, status: .enabled))
+        #expect(!AppModel.loginItemNeedsApproval(asked: true, status: .notRegistered))
+        #expect(!AppModel.loginItemNeedsApproval(asked: true, status: .notFound))
     }
 
     @Test("At launch the window opens only when a first setup step is missing", arguments: all)

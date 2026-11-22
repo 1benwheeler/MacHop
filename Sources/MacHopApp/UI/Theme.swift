@@ -14,6 +14,11 @@ enum Theme {
                               dark: NSColor(white: 0.22, alpha: 1))
     static let selection = dynamic(light: .white, dark: NSColor(white: 0.2, alpha: 1))
 
+    /// Notices: orange, darkened in light mode so small text on a white card can be read
+    /// (about 5:1; the system orange is about 2:1 there).
+    static let noticeOnLight = NSColor(red: 0.70, green: 0.33, blue: 0, alpha: 1)
+    static let notice = dynamic(light: noticeOnLight, dark: .systemOrange)
+
     static let cardRadius = 16.0
 
     private static func dynamic(light: NSColor, dark: NSColor) -> Color {

@@ -216,7 +216,7 @@ private struct PhonePage: View {
                 HStack(spacing: 10) {
                     StatusPill(text: StatusText.title(model), colour: model.statusColour)
                     if let notice = model.notice {
-                        Text(notice).font(.system(size: 12.5)).foregroundStyle(.orange).lineLimit(2)
+                        Text(notice).font(.system(size: 12.5)).foregroundStyle(Theme.notice).lineLimit(2)
                     }
                     Spacer()
                     // The connection lives here too: which iPhone, and what to do in this state.
@@ -446,9 +446,16 @@ private struct SettingsPage: View {
     var body: some View {
         PageFrame(overline: "MacHop", title: "Settings") {
             Panel {
-                SettingRow(symbol: "power", title: "Open at login") {
-                    Toggle("Open at login", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
-                        .toggleStyle(.switch).labelsHidden()
+                SettingRow(symbol: "power", title: "Open at login",
+                           detail: model.loginItemNeedsApproval
+                               ? "MacHop is switched off under Login Items in System Settings. Allow it there." : nil) {
+                    HStack(spacing: 8) {
+                        if model.loginItemNeedsApproval {
+                            Button("Open Login Items…") { model.openLoginItemsSettings() }
+                        }
+                        Toggle("Open at login", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
+                            .toggleStyle(.switch).labelsHidden()
+                    }
                 }
                 RowDivider()
                 // On means on, matching the switch in the menu bar.

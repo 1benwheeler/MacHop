@@ -41,7 +41,7 @@ extension AppModel.Status {
         case .controlling: return "Move back across the edge, or press ⌃⌥⌘⎋, to return."
         case .ready: return "Move the pointer past the \(side) edge of your screen."
         case .paused: return "Your keyboard and pointer only control this Mac."
-        case .needsAccessibility: return "Allow MacHop in System Settings → Privacy & Security → Accessibility."
+        case .needsAccessibility: return "Allow MacHop in \(PrivacyPane.accessibilityPath())."
         case .bluetoothOff: return "Turn on Bluetooth to connect to your iPhone."
         case .bluetoothDenied: return "Allow MacHop in System Settings → Privacy & Security → Bluetooth."
         case .bluetoothUnavailable(let message): return message
