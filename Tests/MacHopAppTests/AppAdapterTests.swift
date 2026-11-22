@@ -252,4 +252,12 @@ struct DiagnosticsTests {
         #expect(!report.contains("Ben"))
         #expect(!report.contains(settings.phoneID!.uuidString))
     }
+
+    @Test("The Mac's model reads as plain text")
+    func macModel() {
+        let model = Diagnostics.macModel
+        #expect(!model.isEmpty)
+        #expect(!model.contains("\0"), "no trailing zero byte from the C string")
+        #expect(model.allSatisfy { $0.isASCII && !$0.isWhitespace })
+    }
 }

@@ -326,6 +326,9 @@ extension Lab {
         // Captured pixels per point (iPhone 15 Pro: 3).
         let pixelsPerPoint = Double(size.width) / 393.0
         let start = uptime
+        // The input runs on this one worker thread and nowhere else; meanwhile this
+        // thread only reads the screen.
+        nonisolated(unsafe) let input = input
         let worker = Thread { try? input() }
         worker.start()
         var previous: Frame?

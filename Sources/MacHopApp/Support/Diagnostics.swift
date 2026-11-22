@@ -114,12 +114,15 @@ enum Diagnostics {
         return lines.joined(separator: "\n")
     }
 
-    private static var macModel: String {
+    /// The Mac's model identifier, e.g. "Mac17,2".
+    static var macModel: String {
         var size = 0
         sysctlbyname("hw.model", nil, &size, nil, 0)
         guard size > 0 else { return "unknown Mac" }
-        var bytes = [CChar](repeating: 0, count: size)
+        var bytes = [UInt8](repeating: 0, count: size)
         sysctlbyname("hw.model", &bytes, &size, nil, 0)
-        return String(cString: bytes)
+        // The system writes a C string: everything up to its terminating zero.
+        let model = String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+        return model.isEmpty ? "unknown Mac" : model
     }
 }
