@@ -20,7 +20,7 @@ final class AppModel {
         case ready
         case controlling
         case paused
-        case blocked(String)
+        case blocked(BlockReason)
     }
 
     private(set) var settings: AppSettings
@@ -141,11 +141,11 @@ final class AppModel {
             self?.lastPhoneAction = (action, ProcessInfo.processInfo.systemUptime)
         }
         session.entryGuard = {
-            if SystemMonitor.secureInputActive { return "A password field on your Mac is using Secure Input." }
-            if SystemMonitor.missionControlShowing { return "Close Mission Control to move onto your iPhone." }
+            if SystemMonitor.secureInputActive { return .secureInput }
+            if SystemMonitor.missionControlShowing { return .missionControl }
             return nil
         }
-        session.onEntryRefused = { [weak self] reason in self?.show(notice: reason) }
+        session.onEntryRefused = { [weak self] refusal in self?.show(notice: refusal.text) }
         session.onWakePhone = { [weak self] in
             if self?.transport.wake() == true { Log.bluetooth.notice("Waking the iPhone") }
         }
@@ -154,7 +154,7 @@ final class AppModel {
             NSSound.beep()
             switch status {
             case .phoneAsleep: show(notice: "\(phoneName) is asleep. Wake it to move onto it.")
-            case .blocked(let reason): show(notice: reason)
+            case .blocked(let reason): show(notice: reason.statusText)
             default: show(notice: "\(phoneName) isn't connected yet.")
             }
         }
@@ -183,7 +183,7 @@ final class AppModel {
         bluetoothAsleep = monitor.asleep
         if bluetoothAsleep {
             Log.bluetooth.notice("Mac going to sleep: letting go of the iPhone")
-            session.returnToMac(.unavailable("Your Mac is going to sleep"))
+            session.returnToMac(.unavailable(.macGoingToSleep))
             connector.suspended = true
             peripheral.stop()
             connector.servicesReady = false
@@ -219,7 +219,7 @@ final class AppModel {
         stats = transport.stats
         let availability = self.availability
         session.mayWakePhone = availability.mayWakePhone
-        session.setEnabled(availability.disabledReason == nil, reason: availability.disabledReason ?? "")
+        session.setEnabled(availability.disabledReason == nil, reason: availability.disabledReason)
         if transport.isReady { linkAttempts = 0 }
         watchLink()
     }
@@ -259,8 +259,8 @@ final class AppModel {
             // Anything still physically held on return stays swallowed until released.
             let held = EventTap.physicallyHeld()
             session.reconcile(keysDown: held.keys, buttonsDown: held.buttons)
-            if case .unavailable(let message)? = reason, !message.isEmpty, message != "Paused" {
-                show(notice: "Input returned to your Mac: \(message).")
+            if case .unavailable(let block?)? = reason, block.isAnnounced {
+                show(notice: "Input returned to your Mac: \(block.text).")
             }
         }
         let why: String = switch reason {
@@ -269,7 +269,7 @@ final class AppModel {
         case .shortcut?: " (shortcut)"
         case .requested?: " (requested)"
         case .reconfigured?: " (settings changed)"
-        case .unavailable(let message)?: " (\(message))"
+        case .unavailable(let block)?: " (\(block?.text ?? ""))"
         }
         Log.input.notice("Input now with \(owner == .phone ? "iPhone" : "Mac", privacy: .public)\(why, privacy: .public)")
         recentHandoffs.append((Date(), "to \(owner == .phone ? "iPhone" : "Mac")\(why)"))
@@ -313,7 +313,7 @@ final class AppModel {
     /// Events during a tap outage went straight to macOS: hand input back to the Mac
     /// and repair key/button ownership from the physical state, so a release the
     /// session never saw cannot leave a key held on the phone.
-    private func captureInterrupted(_ reason: String, revived: Bool = false) {
+    private func captureInterrupted(_ reason: BlockReason, revived: Bool = false) {
         session.returnToMac(.unavailable(reason))
         let held = EventTap.physicallyHeld()
         session.reconcile(keysDown: held.keys, buttonsDown: held.buttons)
@@ -331,7 +331,7 @@ final class AppModel {
 
     private func transportStalled() {
         Log.bluetooth.notice("Bluetooth stopped accepting input; reconnecting")
-        session.returnToMac(.unavailable("Bluetooth stopped responding"))
+        session.returnToMac(.unavailable(.bluetoothStalled))
         connector.reconnect()
         refresh()
     }
@@ -378,9 +378,9 @@ final class AppModel {
             MainActor.assumeIsolated {
                 guard let self, self.owner == .phone, self.ownershipPeriod == current else { return }
                 if SystemMonitor.secureInputActive {
-                    self.session.returnToMac(.unavailable("Secure Input became active on your Mac"))
+                    self.session.returnToMac(.unavailable(.secureInput))
                 } else if !self.tap.isHealthy {
-                    self.captureInterrupted("Input capture stopped")
+                    self.captureInterrupted(.captureStopped)
                 } else {
                     self.watchWhilePhoneOwnsInput(period: current)
                 }
@@ -418,7 +418,7 @@ final class AppModel {
                     self.watchAccessibility()
                 } else {
                     Log.app.notice("Accessibility permission was turned off; stopping input capture")
-                    self.session.returnToMac(.unavailable("Accessibility permission was turned off"))
+                    self.session.returnToMac(.unavailable(.accessibilityRevoked))
                     self.refresh()
                 }
             }

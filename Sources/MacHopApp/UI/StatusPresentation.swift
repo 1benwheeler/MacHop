@@ -50,7 +50,7 @@ extension AppModel.Status {
         case .waitingForPhone: return "Your iPhone is linked; waiting for it to accept the keyboard and pointer."
         case .phoneAsleep:
             return wakesPhone ? "Move onto your iPhone to wake it." : "Wake your iPhone to use it."
-        case .blocked(let reason): return reason
+        case .blocked(let reason): return reason.statusText
         }
     }
 
@@ -77,7 +77,7 @@ extension AppModel.Status {
         case .connecting, .waitingForPhone: "Connecting…"
         case .phoneAsleep: "Asleep"
         case .choosePhone: "Choose your iPhone to begin"
-        case .blocked(let reason): reason
+        case .blocked(let reason): reason.statusText
         case .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable: title(phone: phone)
         }
     }

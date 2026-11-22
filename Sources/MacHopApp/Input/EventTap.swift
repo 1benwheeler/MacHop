@@ -21,7 +21,7 @@ final class EventTap {
     /// macOS disabled the tap (timeout or user input). Events during the gap went
     /// straight to the Mac, so held-key bookkeeping must be repaired. The flag says
     /// whether the tap could be re-enabled.
-    var onInterrupted: ((_ reason: String, _ revived: Bool) -> Void)?
+    var onInterrupted: ((_ reason: BlockReason, _ revived: Bool) -> Void)?
 
     private var port: CFMachPort?
     private var source: CFRunLoopSource?
@@ -71,7 +71,7 @@ final class EventTap {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             // A slow callback (timeout) is usually recoverable: re-enable at once.
             if let port { CGEvent.tapEnable(tap: port, enable: true) }
-            let reason = type == .tapDisabledByTimeout ? "Input capture timed out" : "Input capture was disabled"
+            let reason: BlockReason = type == .tapDisabledByTimeout ? .captureTimedOut : .captureDisabled
             Log.input.notice("Event tap was disabled by macOS (\(type.rawValue)); re-enabled: \(self.isHealthy)")
             onInterrupted?(reason, isHealthy)
             return false

@@ -77,7 +77,7 @@ struct InputSessionTests {
         #expect(!sim.crossToPhone())
         sim.deliver(.button(.left, down: false, location: sim.cursor.location))
 
-        sim.session.setEnabled(false, reason: "paused")
+        sim.session.setEnabled(false, reason: .paused)
         #expect(!sim.crossToPhone())
         sim.session.setEnabled(true)
 
@@ -508,11 +508,11 @@ struct InputSessionTests {
 
     @Test("An entry guard refuses the crossing, says why, and does not nag")
     func entryGuard() {
-        var refusals: [String] = []
-        sim.session.entryGuard = { "Secure Input is on" }
+        var refusals: [EntryRefusal] = []
+        sim.session.entryGuard = { .secureInput }
         sim.session.onEntryRefused = { refusals.append($0) }
         #expect(!sim.crossToPhone())
-        #expect(refusals == ["Secure Input is on"], "one push, one notice")
+        #expect(refusals == [.secureInput], "one push, one notice")
         #expect(!sim.cursor.isHidden)
         sim.session.entryGuard = nil
         sim.settle(InputSession.crossingCooldown)

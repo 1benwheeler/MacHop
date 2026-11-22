@@ -46,8 +46,39 @@ public enum ReturnReason: Equatable, Sendable {
     case edge
     case shortcut
     case requested
-    case unavailable(String)
+    case unavailable(BlockReason?)
     case reconfigured
+}
+
+/// Why the iPhone may not take input, or why input came back to the Mac. The session
+/// only carries these; the words people see for each live in the app.
+public enum BlockReason: Equatable, Hashable, Sendable, CaseIterable {
+    /// The session has only just been created.
+    case starting
+    /// MacHop is switched off.
+    case paused
+    case needsAccessibility
+    /// Input capture couldn't start.
+    case captureUnavailable
+    case macAsleep, displaysAsleep, macLocked, otherUserActive
+    case phoneNotConnected
+    /// The arrangement leaves the pointer nowhere to cross.
+    case arrangement
+    case macGoingToSleep
+    case bluetoothStalled
+    /// A password field took over the keyboard while the iPhone had input.
+    case secureInput
+    case accessibilityRevoked
+    /// macOS paused input capture, or it stopped.
+    case captureTimedOut, captureDisabled, captureStopped
+}
+
+/// Why a crossing onto the iPhone was refused at the last moment.
+public enum EntryRefusal: Equatable, Hashable, Sendable, CaseIterable {
+    /// A password field on the Mac has the keyboard to itself.
+    case secureInput
+    /// Mission Control is showing, and macOS keeps the cursor visible over it.
+    case missionControl
 }
 
 public struct SessionSettings: Equatable, Hashable, Sendable, Codable {
@@ -118,13 +149,14 @@ public final class InputSession {
     public private(set) var phonePointer: Point?
     /// Set when the session may hand input to the phone (capture healthy, not paused…).
     public private(set) var isEnabled = false
-    public private(set) var disabledReason = "Starting"
+    /// Why the phone may not take input; nil while it may.
+    public private(set) var disabledReason: BlockReason? = .starting
 
     /// Called after every ownership change.
     public var onOwnerChange: ((Owner, ReturnReason?) -> Void)?
     /// Consulted just before the phone takes input; a non-nil reason refuses the
     /// crossing (for example while macOS Secure Input protects a password field).
-    public var entryGuard: (() -> String?)?
+    public var entryGuard: (() -> EntryRefusal?)?
     /// Each two-finger scroll event sent to the phone as wheel steps, for diagnosing feel
     /// (amounts and phases only).
     public var onScrollTrace: ((ScrollInput, ScrollReport) -> Void)?
@@ -132,7 +164,7 @@ public final class InputSession {
     public var onPhoneTrace: ((String) -> Void)?
 
     /// Called when `entryGuard` refused a crossing.
-    public var onEntryRefused: ((String) -> Void)?
+    public var onEntryRefused: ((EntryRefusal) -> Void)?
     /// Set while the only thing keeping input off the phone is that it's asleep (it
     /// suspended input) and the user lets MacHop wake it.
     public var mayWakePhone = false
@@ -209,9 +241,9 @@ public final class InputSession {
 
     /// Enables or disables handing input to the phone. Disabling while the phone
     /// owns input returns control to the Mac immediately.
-    public func setEnabled(_ enabled: Bool, reason: String = "") {
+    public func setEnabled(_ enabled: Bool, reason: BlockReason? = nil) {
         isEnabled = enabled
-        disabledReason = enabled ? "" : reason
+        disabledReason = enabled ? nil : reason
         if !enabled { returnToMac(.unavailable(reason)) }
         if let until = jumpWhenReadyUntil, enabled, link.isReady {
             jumpWhenReadyUntil = nil

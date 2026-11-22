@@ -10,7 +10,7 @@ import Testing
 struct StatusPresentationTests {
     nonisolated static let all: [AppModel.Status] = [
         .needsAccessibility, .bluetoothOff, .bluetoothDenied, .bluetoothUnavailable("It broke"), .choosePhone,
-        .connecting, .waitingForPhone, .phoneAsleep, .ready, .controlling, .paused, .blocked("Your Mac is locked")
+        .connecting, .waitingForPhone, .phoneAsleep, .ready, .controlling, .paused, .blocked(.macLocked)
     ]
 
     @Test("Connected looks connected everywhere: green, the full menu-bar mark, a lit iPhone", arguments: all)
@@ -43,11 +43,36 @@ struct StatusPresentationTests {
         #expect(AppModel.Status.ready.detail(side: .bottom, wakesPhone: false) == "Move the pointer past the bottom edge of your screen.")
         #expect(AppModel.Status.phoneAsleep.detail(side: .right, wakesPhone: true) == "Move onto your iPhone to wake it.")
         #expect(AppModel.Status.phoneAsleep.detail(side: .right, wakesPhone: false) == "Wake your iPhone to use it.")
-        let locked = AppModel.Status.blocked("Your Mac is locked")
+        let locked = AppModel.Status.blocked(.macLocked)
         #expect(locked.detail(side: .right, wakesPhone: false) == "Your Mac is locked")
         #expect(locked.menuText(phone: "iPhone1") == "Your Mac is locked")
         #expect(locked.shortText == "On hold")
         #expect(AppModel.Status.bluetoothUnavailable("It broke").detail(side: .right, wakesPhone: false) == "It broke")
+        let arrangement = AppModel.Status.blocked(.arrangement)
+        #expect(arrangement.detail(side: .right, wakesPhone: false) == "Check the arrangement in Settings.")
+    }
+
+    @Test("Every reason keeps its wording")
+    func reasonWording() {
+        let expected: [BlockReason: String] = [
+            .starting: "Starting", .paused: "Paused", .needsAccessibility: "MacHop needs Accessibility permission",
+            .captureUnavailable: "Input capture is unavailable", .macAsleep: "Your Mac is asleep",
+            .displaysAsleep: "Your displays are asleep", .macLocked: "Your Mac is locked",
+            .otherUserActive: "Another user is active", .phoneNotConnected: "iPhone is not connected",
+            .arrangement: "Check the arrangement", .macGoingToSleep: "Your Mac is going to sleep",
+            .bluetoothStalled: "Bluetooth stopped responding", .secureInput: "Secure Input became active on your Mac",
+            .accessibilityRevoked: "Accessibility permission was turned off", .captureTimedOut: "Input capture timed out",
+            .captureDisabled: "Input capture was disabled", .captureStopped: "Input capture stopped"
+        ]
+        #expect(expected.count == BlockReason.allCases.count)
+        for reason in BlockReason.allCases { #expect(reason.text == expected[reason], "\(reason)") }
+        #expect(EntryRefusal.secureInput.text == "A password field on your Mac is using Secure Input.")
+        #expect(EntryRefusal.missionControl.text == "Close Mission Control to move onto your iPhone.")
+    }
+
+    @Test("Input coming back is announced, except when the user switched MacHop off themselves")
+    func announcements() {
+        for reason in BlockReason.allCases { #expect(reason.isAnnounced == (reason != .paused), "\(reason)") }
     }
 
     @Test("The main button offers the next step; the steps that get MacHop going stand out")
@@ -56,7 +81,7 @@ struct StatusPresentationTests {
             (.needsAccessibility, "Allow Access…", true), (.bluetoothDenied, "Open Bluetooth Settings…", false),
             (.controlling, "Return to Mac", false), (.connecting, "Reconnect", false), (.waitingForPhone, "Reconnect", false),
             (.paused, "Turn On", true), (.choosePhone, "Choose iPhone…", true), (.ready, "Turn Off", false),
-            (.phoneAsleep, "Turn Off", false), (.blocked("Your Mac is locked"), "Turn Off", false),
+            (.phoneAsleep, "Turn Off", false), (.blocked(.macLocked), "Turn Off", false),
             (.bluetoothOff, "Turn Off", false), (.bluetoothUnavailable("It broke"), "Turn Off", false)
         ]
         #expect(expected.count == Self.all.count)

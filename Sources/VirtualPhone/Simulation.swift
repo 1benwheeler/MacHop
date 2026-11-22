@@ -219,9 +219,9 @@ public final class Simulation {
                                displays: displays, link: transport, cursor: cursor, scheduler: scheduler)
         session.onOwnerChange = { [weak self] owner, reason in self?.ownerChanges.append((owner, reason)) }
         transport.onReadyChange = { [weak self] ready in
-            self?.session.setEnabled(ready, reason: ready ? "" : "iPhone disconnected")
+            self?.session.setEnabled(ready, reason: ready ? nil : .phoneNotConnected)
         }
-        transport.onStall = { [weak self] in self?.session.setEnabled(false, reason: "Bluetooth stalled") }
+        transport.onStall = { [weak self] in self?.session.setEnabled(false, reason: .bluetoothStalled) }
         radio.connect()
         settle()
     }

@@ -12,7 +12,7 @@ struct Availability: Equatable {
     /// Input capture (the event tap) is running.
     var capturing = true
     /// Why the Mac itself must keep input (asleep, locked, another user), if anything.
-    var systemBlock: String?
+    var systemBlock: BlockReason?
     var bluetooth: HIDPeripheral.State = .waiting
     var link: PhoneConnector.LinkState = .connected
     var phoneChosen = true
@@ -26,16 +26,16 @@ struct Availability: Equatable {
     var wakesPhone = false
 
     /// What stops input on the Mac's side, whatever the iPhone is doing.
-    private var blocker: String? {
-        paused ? "Paused" :
-            !accessibilityGranted ? "MacHop needs Accessibility permission" :
-            !capturing ? "Input capture is unavailable" :
+    private var blocker: BlockReason? {
+        paused ? .paused :
+            !accessibilityGranted ? .needsAccessibility :
+            !capturing ? .captureUnavailable :
             systemBlock
     }
 
     /// Why the iPhone may not take input right now; nil when it may.
-    var disabledReason: String? {
-        blocker ?? (phoneReady ? nil : "iPhone is not connected") ?? (arrangementUsable ? nil : "Check the arrangement")
+    var disabledReason: BlockReason? {
+        blocker ?? (phoneReady ? nil : .phoneNotConnected) ?? (arrangementUsable ? nil : .arrangement)
     }
 
     /// Waking is only offered when the iPhone being asleep is all that's in the way.
@@ -63,7 +63,7 @@ struct Availability: Equatable {
         }
         if !phoneChosen && !phoneReady { return .choosePhone }
         if let systemBlock { return .blocked(systemBlock) }
-        if phoneReady { return arrangementUsable ? .ready : .blocked("Check the arrangement in Settings.") }
+        if phoneReady { return arrangementUsable ? .ready : .blocked(.arrangement) }
         if link == .connected && phoneSuspended { return .phoneAsleep }
         return link == .connected ? .waitingForPhone : .connecting
     }

@@ -65,7 +65,8 @@ enum Diagnostics {
         facts.architecture = "Intel"
         #endif
         facts.macModel = macModel
-        facts.status = "\(model.status)"
+        // A hold reads as its sentence, as it always has in these reports.
+        facts.status = if case .blocked(let reason) = model.status { "blocked(\"\(reason.statusText)\")" } else { "\(model.status)" }
         facts.bluetooth = "\(model.bluetooth)"
         facts.link = "\(model.link)"
         facts.accessibility = model.accessibilityGranted

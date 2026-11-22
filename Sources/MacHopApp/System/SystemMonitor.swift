@@ -18,11 +18,11 @@ final class SystemMonitor {
     private var tokens: [(NotificationCenter, NSObjectProtocol)] = []
 
     /// Why input must stay on the Mac right now, if anything.
-    var blockingReason: String? {
-        if asleep { return "Your Mac is asleep" }
-        if displaysAsleep { return "Your displays are asleep" }
-        if locked { return "Your Mac is locked" }
-        if sessionInactive { return "Another user is active" }
+    var blockingReason: BlockReason? {
+        if asleep { return .macAsleep }
+        if displaysAsleep { return .displaysAsleep }
+        if locked { return .macLocked }
+        if sessionInactive { return .otherUserActive }
         return nil
     }
 

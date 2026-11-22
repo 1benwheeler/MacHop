@@ -206,7 +206,7 @@ struct SimulationTests {
                 sim.settle(Double.random(in: 0...0.5, using: &random))
                 sim.radio.connect()
             case 88..<91:
-                sim.session.setEnabled(false, reason: "sleep")
+                sim.session.setEnabled(false, reason: .macAsleep)
                 sim.settle(0.05)
                 sim.session.setEnabled(sim.transport.isReady)
             case 91..<93:
@@ -361,7 +361,7 @@ struct SimulationTests {
         sim.settle()
         // The tap was disabled: the key-up went straight to macOS. The app reacts to
         // the gap by returning input and reconciling with the physical key state.
-        sim.session.returnToMac(.unavailable("Input capture was interrupted"))
+        sim.session.returnToMac(.unavailable(.captureDisabled))
         sim.session.reconcile(keysDown: [], buttonsDown: [])
         sim.settle()
         #expect(sim.phone.pressedKeys.isEmpty)
@@ -374,7 +374,7 @@ struct SimulationTests {
         #expect(sim.crossToPhone())
         sim.pressModifier(56)
         sim.keyDown(0)
-        sim.session.setEnabled(false, reason: "Mac is going to sleep")
+        sim.session.setEnabled(false, reason: .macGoingToSleep)
         sim.settle()
         #expect(sim.phone.isIdle)
         sim.keyUp(0)

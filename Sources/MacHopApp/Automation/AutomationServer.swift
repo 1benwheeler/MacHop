@@ -318,7 +318,7 @@ final class AutomationServer {
             "ok": true,
             "owner": session.owner == .phone ? "phone" : "mac",
             "enabled": session.isEnabled,
-            "disabledReason": session.disabledReason,
+            "disabledReason": session.disabledReason?.text ?? "",
             "ready": model.transport.isReady,
             "suspended": model.transport.isSuspended,
             "subscriptions": model.transport.subscribedReports.sorted().map(Int.init),

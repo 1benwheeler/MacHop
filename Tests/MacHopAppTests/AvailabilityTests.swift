@@ -21,26 +21,26 @@ struct AvailabilityTests {
     @Test("The reason input is off: MacHop's own blockers first, then the iPhone, then the arrangement")
     func disabledReasonOrder() {
         // Everything wrong at once; each fix reveals the next reason.
-        var all = Availability(paused: true, accessibilityGranted: false, capturing: false, systemBlock: "Your Mac is locked",
+        var all = Availability(paused: true, accessibilityGranted: false, capturing: false, systemBlock: .macLocked,
                                phoneReady: false, arrangementUsable: false)
-        #expect(all.disabledReason == "Paused")
+        #expect(all.disabledReason == .paused)
         all.paused = false
-        #expect(all.disabledReason == "MacHop needs Accessibility permission")
+        #expect(all.disabledReason == .needsAccessibility)
         all.accessibilityGranted = true
-        #expect(all.disabledReason == "Input capture is unavailable")
+        #expect(all.disabledReason == .captureUnavailable)
         all.capturing = true
-        #expect(all.disabledReason == "Your Mac is locked")
+        #expect(all.disabledReason == .macLocked)
         all.systemBlock = nil
-        #expect(all.disabledReason == "iPhone is not connected")
+        #expect(all.disabledReason == .phoneNotConnected)
         all.phoneReady = true
-        #expect(all.disabledReason == "Check the arrangement")
+        #expect(all.disabledReason == .arrangement)
         all.arrangementUsable = true
         #expect(all.disabledReason == nil)
     }
 
     @Test("Every system state that keeps input on the Mac disables the iPhone and shows as on hold",
-          arguments: ["Your Mac is asleep", "Your displays are asleep", "Your Mac is locked", "Another user is active"])
-    func systemBlocks(reason: String) {
+          arguments: [BlockReason.macAsleep, .displaysAsleep, .macLocked, .otherUserActive])
+    func systemBlocks(reason: BlockReason) {
         var blocked = ready
         blocked.systemBlock = reason
         #expect(blocked.disabledReason == reason)
@@ -53,7 +53,7 @@ struct AvailabilityTests {
     func waking() {
         var asleep = Availability(link: .connected, phoneReady: false, phoneSuspended: true, wakesPhone: true)
         #expect(asleep.mayWakePhone)
-        #expect(asleep.disabledReason == "iPhone is not connected", "input itself stays off until it wakes")
+        #expect(asleep.disabledReason == .phoneNotConnected, "input itself stays off until it wakes")
         #expect(asleep.status == .phoneAsleep)
 
         asleep.wakesPhone = false
@@ -71,7 +71,7 @@ struct AvailabilityTests {
             #expect(!other.mayWakePhone)
         }
         var locked = asleep
-        locked.systemBlock = "Your Mac is locked"
+        locked.systemBlock = .macLocked
         #expect(!locked.mayWakePhone)
     }
 
@@ -80,7 +80,7 @@ struct AvailabilityTests {
     @Test("Status: whoever has input, then off, then what's missing, in that order")
     func statusOrder() {
         // Everything wrong at once; each fix reveals the next status.
-        var all = Availability(owner: .phone, paused: true, accessibilityGranted: false, systemBlock: "Your Mac is locked",
+        var all = Availability(owner: .phone, paused: true, accessibilityGranted: false, systemBlock: .macLocked,
                                bluetooth: .off, link: .connecting, phoneChosen: false, phoneReady: false,
                                arrangementUsable: false)
         #expect(all.status == .controlling)
@@ -93,13 +93,13 @@ struct AvailabilityTests {
         all.bluetooth = .waiting
         #expect(all.status == .choosePhone)
         all.phoneChosen = true
-        #expect(all.status == .blocked("Your Mac is locked"))
+        #expect(all.status == .blocked(.macLocked))
         all.systemBlock = nil
         #expect(all.status == .connecting)
         all.link = .connected
         #expect(all.status == .waitingForPhone)
         all.phoneReady = true
-        #expect(all.status == .blocked("Check the arrangement in Settings."))
+        #expect(all.status == .blocked(.arrangement))
         all.arrangementUsable = true
         #expect(all.status == .ready)
     }
